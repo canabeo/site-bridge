@@ -89,26 +89,29 @@ class SB_Backups_Controller {
 			return SB_Response::internal( 'wp_update_post failed: ' . $res->get_error_message() );
 		}
 
-		// Восстанавливаем meta
+		// Восстанавливаем meta через прямой SQL (см. SB_Meta — почему).
 		$meta = json_decode( $backup['meta_snapshot'], true );
 		$restored_keys = [];
 		if ( is_array( $meta ) ) {
-			// Сначала удаляем все meta которые есть сейчас (включая те, что были добавлены ПОСЛЕ snapshot'a)
-			$current_meta = get_post_meta( $id );
-			foreach ( array_keys( $current_meta ) as $key ) {
-				delete_post_meta( $id, $key );
-			}
-			// Восстанавливаем из snapshot
+			// Удаляем все meta которые есть сейчас (включая добавленные ПОСЛЕ snapshot'a)
+			SB_Meta::delete_all_for_post( $id );
+
+			// Восстанавливаем из snapshot — значение пишется как есть, без unslash и фильтров
 			foreach ( $meta as $key => $values ) {
 				if ( ! is_array( $values ) ) {
 					$values = [ $values ];
 				}
 				foreach ( $values as $v ) {
-					add_post_meta( $id, $key, maybe_unserialize( $v ) );
+					// $v — строка из json_decode, точно такой же байт-в-байт, как был в БД
+					SB_Meta::insert( $id, (string) $key, (string) $v );
 				}
 				$restored_keys[] = $key;
 			}
 		}
+
+		// Инвалидация Breakdance-кэшей после восстановления — на случай если в кэше остались
+		// артефакты от испорченных правок
+		SB_Meta::invalidate_breakdance_caches( $id );
 
 		clean_post_cache( $id );
 

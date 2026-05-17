@@ -9,7 +9,19 @@ WordPress-плагин для безопасного программного д
 Security, Imunify360 и т.д.). Site Bridge использует собственный заголовок `X-SB-Signature` с
 HMAC-подписью, который WAF не воспринимает как login-попытку.
 
-## Возможности (v1.0.0)
+## Changelog
+
+### 1.0.1 — 2026-05-17 (hotfix)
+
+- 🐛 **Critical fix**: `update_page` / `restore_backup` теряли данные при работе с большими JSON-meta (`_breakdance_data`). Причина — `wp_unslash()` внутри `update_post_meta()` снимает escape-слэши JSON. Теперь meta-запись идёт через прямой SQL в `wp_postmeta` (`SB_Meta` helper) минуя WP-layer.
+- ➕ После записи `_breakdance_data` автоматически инвалидируется Breakdance CSS-кэш: удаляются meta `_breakdance_css_file_paths_cache` / `_breakdance_dependency_cache` и физические файлы `wp-content/uploads/breakdance/css/post-{id}.css`. Также вызываются `rocket_clean_post` и `litespeed_purge_post` если плагины активны.
+- ➕ `restore_backup` теперь тоже инвалидирует Breakdance-кэши после восстановления.
+
+### 1.0.0 — 2026-05-17
+
+- Первый релиз. Pages, backups, plugins, files, cache, forms, audit-log, error-log.
+
+## Возможности (v1.0.1)
 
 | Группа | Эндпоинты |
 |---|---|

@@ -124,18 +124,33 @@ class SB_Pages_Controller {
 			}
 		}
 
-		// 3. Обновление meta
-		$meta_changed = [];
+		// 3. Обновление meta — ВСЕГДА через прямой SQL (SB_Meta), минуя WP-layer.
+		// Причина: update_post_meta() вызывает wp_unslash(), который снимает один слой эскейпов.
+		// Для больших JSON-строк (`_breakdance_data` с \uXXXX) это тихо портит данные.
+		$meta_changed       = [];
+		$breakdance_touched = false;
 		if ( ! empty( $payload['meta'] ) && is_array( $payload['meta'] ) ) {
 			foreach ( $payload['meta'] as $key => $value ) {
 				$key_clean = sanitize_key( $key );
 				if ( $key_clean === '' ) {
 					continue;
 				}
-				// breakdance_data — большая строка JSON; WP сам её сериализует если массив
-				update_post_meta( $id, $key_clean, $value );
+				// Для массивов/объектов используем maybe_serialize (WP-конвенция хранения).
+				// Для строк/чисел — кладём как есть, БЕЗ unslash.
+				$store = is_scalar( $value ) || $value === null
+					? (string) $value
+					: maybe_serialize( $value );
+				SB_Meta::set( $id, $key_clean, $store );
 				$meta_changed[] = $key_clean;
+				if ( strpos( $key_clean, '_breakdance' ) === 0 || strpos( $key_clean, 'breakdance' ) === 0 ) {
+					$breakdance_touched = true;
+				}
 			}
+		}
+
+		// 3b. Инвалидация Breakdance-кэшей если меняли что-то из его меты
+		if ( $breakdance_touched ) {
+			SB_Meta::invalidate_breakdance_caches( $id );
 		}
 
 		// 4. Возвращаем обновлённую страницу
