@@ -1,9 +1,10 @@
 <?php
 /**
- * SB_Config — централизованное чтение конфигурации из wp-config.php.
+ * SB_Config — centralised reader of plugin configuration from wp-config.php.
  *
- * Никаких настроек в админке. Всё через константы — потому что админка может
- * быть скомпрометирована, а wp-config — нет (если хостинг не пробит).
+ * No admin-UI settings. Everything is read from PHP constants — because the
+ * wp-admin session could be compromised, but wp-config.php usually isn't
+ * (unless the hosting itself is breached).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -12,12 +13,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class SB_Config {
 
-	/** Длина секрета в hex/base64 после декодирования (минимум). */
+	/** Minimum secret length (in bytes / chars of the constant value). */
 	const MIN_SECRET_BYTES = 32;
 
 	/**
-	 * Текущий активный секрет (raw bytes после base64url-decode либо как есть).
-	 * @return string|null  null если не задан или слишком короткий.
+	 * Current active secret.
+	 * @return string|null  null if not defined or too short.
 	 */
 	public static function get_secret() {
 		if ( ! defined( 'SITE_BRIDGE_SECRET' ) ) {
@@ -31,7 +32,7 @@ class SB_Config {
 	}
 
 	/**
-	 * Предыдущий секрет — действителен в течение grace-периода ротации.
+	 * Previous secret — valid during a rotation grace period.
 	 * @return string|null
 	 */
 	public static function get_secret_previous() {
@@ -46,7 +47,7 @@ class SB_Config {
 	}
 
 	/**
-	 * Список разрешённых IP/CIDR (CSV). Пустой массив = любой IP допустим.
+	 * Allowed IPs / IPv4 CIDRs (CSV). Empty array = any IP allowed.
 	 * @return array
 	 */
 	public static function get_allowed_ips() {
@@ -61,7 +62,7 @@ class SB_Config {
 	}
 
 	/**
-	 * Допуск по времени timestamp в секундах (по умолчанию 300).
+	 * Timestamp tolerance in seconds (default 300).
 	 * @return int
 	 */
 	public static function get_timestamp_tolerance() {
@@ -75,7 +76,7 @@ class SB_Config {
 	}
 
 	/**
-	 * Email для алертов. По умолчанию — admin_email сайта.
+	 * Alert email recipient. Defaults to the site's admin_email.
 	 * @return string|null
 	 */
 	public static function get_alert_email() {
@@ -90,8 +91,9 @@ class SB_Config {
 	}
 
 	/**
-	 * Уровень логирования: 'info' (по умолчанию) или 'debug'.
-	 * При 'debug' логируются тела запросов и ответов (только во время разработки).
+	 * Log level: 'info' (default) or 'debug'.
+	 * With 'debug', full request/response bodies are stored in the audit log
+	 * (truncated to 64 KB). Useful during initial setup, switch to 'info' in production.
 	 * @return string
 	 */
 	public static function get_log_level() {
@@ -101,18 +103,18 @@ class SB_Config {
 				return $v;
 			}
 		}
-		// Дефолт на время разработки — debug. После стабилизации сменим на info через wp-config.
+		// Default during development is 'debug'. Switch via wp-config once stable.
 		return 'debug';
 	}
 
 	/**
-	 * Текущий REMOTE_ADDR с учётом возможного прокси (Cloudflare).
+	 * Current REMOTE_ADDR, accounting for known proxies (Cloudflare etc.).
 	 * @return string
 	 */
 	public static function get_remote_ip() {
-		// Приоритет: CF-Connecting-IP (Cloudflare), X-Real-IP, X-Forwarded-For (первый), REMOTE_ADDR.
-		// ВНИМАНИЕ: эти заголовки тривиально подделываются, если запрос идёт напрямую к Apache,
-		// минуя CF. Поэтому в продакшене на сайтах БЕЗ Cloudflare надёжнее всего REMOTE_ADDR.
+		// Priority: CF-Connecting-IP (Cloudflare), X-Real-IP, X-Forwarded-For (first), REMOTE_ADDR.
+		// WARNING: these headers are trivially spoofable if the request bypasses CF and hits Apache directly.
+		// On sites WITHOUT Cloudflare in front, REMOTE_ADDR is the only reliable source.
 		$candidates = [
 			$_SERVER['HTTP_CF_CONNECTING_IP'] ?? '',
 			$_SERVER['HTTP_X_REAL_IP']        ?? '',
@@ -131,8 +133,8 @@ class SB_Config {
 	}
 
 	/**
-	 * Проверка IP против whitelist (поддержка IPv4 + IPv4-CIDR).
-	 * Если whitelist пуст — true (любой IP разрешён).
+	 * Match $ip against the whitelist (supports IPv4 and IPv4 CIDR).
+	 * Empty whitelist returns true (any IP allowed).
 	 * @param string $ip
 	 * @return bool
 	 */
@@ -155,7 +157,7 @@ class SB_Config {
 		return false;
 	}
 
-	/** Проверка IPv4 в CIDR. IPv6 не поддерживаем в v1. */
+	/** IPv4 CIDR membership test. IPv6 is not supported in v1. */
 	private static function ip_in_cidr( $ip, $cidr ) {
 		list( $subnet, $bits ) = array_pad( explode( '/', $cidr ), 2, 32 );
 		$bits   = (int) $bits;

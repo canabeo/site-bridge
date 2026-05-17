@@ -1,15 +1,15 @@
 <?php
 /**
- * SB_Post — прямой доступ к {prefix}posts минуя WP-layer.
+ * SB_Post — direct access to the {prefix}posts table, bypassing the WP layer.
  *
- * Зачем: wp_update_post() вызывает wp_unslash() и kses-фильтры, которые меняют
- * содержимое. Для случаев когда мы хотим записать точно те байты что передали
- * (например, Gutenberg block HTML с атрибутами в JSON-форме, или большой
- * pre-rendered HTML), нужен прямой SQL.
+ * Why: wp_update_post() invokes wp_unslash() and kses filters, which mutate
+ * the stored content. For cases where we need to write exactly the bytes we
+ * received (e.g. Gutenberg block HTML with JSON attributes in HTML comments,
+ * or large pre-rendered HTML), direct SQL is required.
  *
- * Используется в SB_Pages_Controller для контентной правки. Для большинства
- * обычных операций (изменение title/status) всё ещё корректно работать через
- * wp_update_post() — он триггерит хуки save_post, чистит ревизии и т.д.
+ * Used by SB_Pages_Controller for content edits. For typical operations
+ * (changing only title/status), wp_update_post() is still preferable as it
+ * triggers the save_post hook, manages revisions, etc.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -19,8 +19,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 class SB_Post {
 
 	/**
-	 * Прямая запись поля post_content в wp_posts. Минует wp_unslash и kses.
-	 * Также обновляет post_modified*.
+	 * Direct write of the post_content field in wp_posts. Bypasses wp_unslash and kses.
+	 * Also updates post_modified*.
 	 *
 	 * @param int    $post_id
 	 * @param string $content
@@ -47,8 +47,8 @@ class SB_Post {
 	}
 
 	/**
-	 * Прямая запись произвольных полей wp_posts (title, slug, status, content, excerpt).
-	 * Каждое поле проходит без unslash и фильтров. Только то что переданo.
+	 * Direct write of arbitrary wp_posts fields (title, slug, status, content, excerpt).
+	 * Every field is written verbatim, without unslash or filters.
 	 *
 	 * @param int   $post_id
 	 * @param array $fields  ['post_title'=>..., 'post_content'=>..., 'post_name'=>..., 'post_status'=>..., 'post_excerpt'=>...]

@@ -1,8 +1,8 @@
 <?php
 /**
- * SB_Cache_Controller — purge кэшей всех популярных WP cache-плагинов.
+ * SB_Cache_Controller — purge endpoints for popular WP cache plugins.
  *
- * Поддерживается:
+ * Supported:
  *   - WP Rocket
  *   - LiteSpeed Cache
  *   - W3 Total Cache
@@ -13,18 +13,18 @@
  *   - SG Optimizer (SiteGround)
  *   - Swift Performance
  *   - Comet Cache
- *   - Autoptimize (asset cache, не page)
+ *   - Autoptimize (asset cache, not page cache)
  *   - Seraphinite Accelerator
- *   - WP Object Cache (нативный)
+ *   - WP Object Cache (native)
  *
  * Endpoint: POST /cache/purge
  * Body JSON:
  *   {
- *     "targets": ["rocket", "litespeed", ...] | null   // null = все которые установлены
- *     "url":     "https://...page"                       // опционально, очистка конкретной страницы
+ *     "targets": ["rocket", "litespeed", ...] | null   // null = all installed
+ *     "url":     "https://...page"                       // optional, purge a single page
  *   }
  *
- * Безопасно: если плагин не активен, его блок просто пропускается ("not installed").
+ * Safe: if a plugin is not active, its branch returns "not installed".
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -33,7 +33,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class SB_Cache_Controller {
 
-	/** Список всех поддерживаемых cache-таргетов. */
+	/** Full list of supported cache targets. */
 	const ALL_TARGETS = [
 		'rocket', 'litespeed', 'w3tc', 'wp_super_cache', 'cache_enabler',
 		'wp_fastest_cache', 'hummingbird', 'sg_optimizer', 'swift_performance',
@@ -109,7 +109,7 @@ class SB_Cache_Controller {
 			$results['seraphinite'] = self::purge_seraphinite();
 		}
 
-		// 13. WP Object Cache (нативный)
+		// 13. WP Object Cache (native)
 		if ( in_array( 'wp', $targets, true ) ) {
 			wp_cache_flush();
 			$results['wp'] = 'wp_cache_flush() called';
@@ -121,8 +121,8 @@ class SB_Cache_Controller {
 	}
 
 	// ───────────────────────────────────────────────────────────
-	// Per-plugin implementations — каждая проверяет наличие плагина
-	// и возвращает короткий статус-string.
+	// Per-plugin implementations — each checks whether the plugin is active
+	// and returns a short status string.
 	// ───────────────────────────────────────────────────────────
 
 	private static function purge_rocket( $url ) {
@@ -240,7 +240,7 @@ class SB_Cache_Controller {
 	}
 
 	private static function purge_comet_cache() {
-		// Comet Cache (бывший ZenCache)
+		// Comet Cache (formerly ZenCache)
 		if ( ! class_exists( '\\WebSharks\\CometCache\\Plugin' ) && ! function_exists( 'comet_cache_clear' ) ) return 'not installed';
 		try {
 			if ( function_exists( 'comet_cache_clear' ) ) {
@@ -254,7 +254,7 @@ class SB_Cache_Controller {
 	}
 
 	private static function purge_autoptimize() {
-		// Autoptimize — asset cache (CSS/JS combine), не page cache
+		// Autoptimize — asset cache (CSS/JS combine), not page cache
 		if ( ! class_exists( 'autoptimizeCache' ) ) return 'not installed';
 		try {
 			if ( method_exists( 'autoptimizeCache', 'clearall' ) ) {

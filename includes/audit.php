@@ -1,14 +1,14 @@
 <?php
 /**
- * SB_Audit — журналирование всех запросов.
+ * SB_Audit — request journal.
  *
- * Таблица {prefix}sb_audit заполняется на каждом запросе к /wp-json/sb/v1/*.
- * При log_level=info — записывается только метаинформация + sha256(body).
- * При log_level=debug — дополнительно сохраняется первые 64KB тела запроса/ответа
- * в JSON-поле details (для разработки).
+ * The {prefix}sb_audit table is written to on every request to /wp-json/sb/v1/*.
+ * At log_level=info — only metadata + sha256(body) is stored.
+ * At log_level=debug — additionally the first 64 KB of the request/response body
+ * is stored in the `details` JSON column (useful during initial setup).
  *
- * Записи иммутабельны: REST-эндпоинт audit-log только GET (нет DELETE).
- * Чистка — через WP-Cron автоматически удаляет записи старше 90 дней.
+ * Rows are immutable: the REST audit-log endpoint is GET only (no DELETE).
+ * Cleanup — a WP-Cron task automatically removes rows older than 90 days.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -18,18 +18,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 class SB_Audit {
 
 	const TABLE       = 'sb_audit';
-	const MAX_BODY_KB = 64;        // в debug-режиме сохраняем не больше 64KB тела
+	const MAX_BODY_KB = 64;        // debug-mode body cap
 	const RETENTION_DAYS = 90;
 
 	private static $request_start_time = null;
 
-	/** Запоминаем время начала для расчёта duration. Вызывается из rest.php. */
+	/** Remember start time for duration calculation. Called from rest.php. */
 	public static function mark_request_start() {
 		self::$request_start_time = microtime( true );
 	}
 
 	/**
-	 * Лог успешного запроса. Вызывается из обвязки REST после выполнения callback.
+	 * Log a successful request. Called from the REST wrapper after the callback runs.
 	 *
 	 * @param WP_REST_Request $request
 	 * @param mixed           $response  WP_REST_Response | WP_Error | array | scalar
@@ -80,8 +80,8 @@ class SB_Audit {
 	}
 
 	/**
-	 * Отдельный шорткат на лог auth-провалов (когда permission_callback вернул WP_Error).
-	 * Здесь нельзя получить полное тело и т.д. — пишем минимум.
+	 * Shortcut for logging auth failures (when permission_callback returns WP_Error).
+	 * At that point we don't have a full response — store the minimum.
 	 */
 	public static function log_auth_failure( WP_REST_Request $request, $ip, $reason ) {
 		global $wpdb;
@@ -121,18 +121,17 @@ class SB_Audit {
 	}
 
 	/**
-	 * Лог «опасной операции» — пишется явным вызовом из контроллеров.
-	 * Например: загрузка плагина, перезапись файла, восстановление бэкапа.
-	 * Дополнительно шлётся email-алерт.
+	 * Log a "dangerous operation" — called explicitly from controllers.
+	 * E.g. plugin upload, file overwrite, backup restore. Also dispatches an email alert.
 	 */
 	public static function log_dangerous_op( $action, array $context = [] ) {
-		// Пишется в общую таблицу как часть текущего запроса — отдельной записи не нужно.
-		// Этот метод служит точкой для email-алерта.
+		// Written to the main audit row of the current request — no separate row needed.
+		// This method exists as the trigger point for email alerts.
 		SB_Email_Alerter::dangerous_op( $action, $context );
 	}
 
 	/**
-	 * Выборка записей для GET /audit-log.
+	 * Fetch audit rows for GET /audit-log.
 	 *
 	 * @param array $args  ['limit' => int, 'since' => 'YYYY-MM-DD HH:MM:SS', 'auth_status' => string, 'route' => string]
 	 * @return array
@@ -164,7 +163,7 @@ class SB_Audit {
 		return $wpdb->get_results( $sql, ARRAY_A );
 	}
 
-	/** Запускается WP-Cron — чистит старые записи. */
+	/** WP-Cron handler — purges old rows. */
 	public static function cleanup_old_records() {
 		global $wpdb;
 		$table = $wpdb->prefix . self::TABLE;
@@ -200,7 +199,7 @@ class SB_Audit {
 
 	private static function safe_headers( WP_REST_Request $request ) {
 		$h = $request->get_headers();
-		// Не пишем тело Authorization-заголовков
+		// Don't log auth-related header values
 		foreach ( [ 'x_sb_signature', 'authorization' ] as $k ) {
 			if ( isset( $h[ $k ] ) ) {
 				$h[ $k ] = [ '<redacted>' ];

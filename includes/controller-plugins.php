@@ -1,15 +1,15 @@
 <?php
 /**
- * SB_Plugins_Controller — управление плагинами.
+ * SB_Plugins_Controller — plugin management.
  *
- * Возможности:
- *   GET    /plugins                       — список всех плагинов
- *   POST   /plugins/upload                — загрузить ZIP (multipart или base64 в JSON), установить, опц. активировать
+ * Capabilities:
+ *   GET    /plugins                       — list all plugins
+ *   POST   /plugins/upload                — upload ZIP (multipart or base64 in JSON), install, optionally activate
  *   POST   /plugins/{slug}/activate
  *   POST   /plugins/{slug}/deactivate
  *   DELETE /plugins/{slug}
  *
- * ВНИМАНИЕ: запретно деактивировать самого себя — иначе следующие запросы сломаются.
+ * NOTE: deactivating Site Bridge itself is forbidden — subsequent requests would otherwise break.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -44,15 +44,15 @@ class SB_Plugins_Controller {
 	/**
 	 * POST /plugins/upload
 	 *
-	 * Принимает JSON:
+	 * Accepts JSON:
 	 *   {
 	 *     "filename": "my-plugin-1.0.0.zip",
 	 *     "zip_base64": "<base64-encoded ZIP bytes>",
 	 *     "activate": true,
-	 *     "overwrite": true        // переустановка поверх существующего
+	 *     "overwrite": true        // reinstall on top of existing
 	 *   }
 	 *
-	 * Альтернативно — multipart/form-data с полем 'zip' (для больших ZIP).
+	 * Alternatively — multipart/form-data with a 'zip' field (for large ZIPs).
 	 */
 	public static function upload_plugin( WP_REST_Request $request ) {
 		require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -72,7 +72,7 @@ class SB_Plugins_Controller {
 			$filename = $files['zip']['name'];
 			$zip_path = $files['zip']['tmp_name'];
 		}
-		// Base64 в JSON
+		// Base64 in JSON
 		elseif ( ! empty( $payload['zip_base64'] ) ) {
 			$bytes = base64_decode( $payload['zip_base64'], true );
 			if ( $bytes === false ) {
@@ -91,12 +91,12 @@ class SB_Plugins_Controller {
 		$activate  = ! empty( $payload['activate'] );
 		$overwrite = ! empty( $payload['overwrite'] );
 
-		// Distinguish: install_plugins_upload — для install/upgrade
+		// install_plugins_upload is used for install/upgrade
 		WP_Filesystem();
 		$upgrader = new Plugin_Upgrader( new WP_Ajax_Upgrader_Skin() );
 		$result   = $upgrader->install( $zip_path, [ 'overwrite_package' => $overwrite ] );
 
-		// Удалим tmp если мы его сами создали
+		// Remove tmp if we created it ourselves
 		if ( ! isset( $files['zip']['tmp_name'] ) && $zip_path && file_exists( $zip_path ) ) {
 			@unlink( $zip_path );
 		}
@@ -165,7 +165,7 @@ class SB_Plugins_Controller {
 		if ( ! $file ) {
 			return SB_Response::not_found( 'Plugin "' . $slug . '"' );
 		}
-		// Защита от самовыключения
+		// Self-deactivation guard
 		if ( $file === SITE_BRIDGE_BASENAME ) {
 			return SB_Response::validation( 'Cannot deactivate site-bridge itself via API.' );
 		}
@@ -188,7 +188,7 @@ class SB_Plugins_Controller {
 			return SB_Response::validation( 'Cannot delete site-bridge itself via API.' );
 		}
 
-		// Деактивируем перед удалением
+		// Deactivate before delete
 		if ( is_plugin_active( $file ) ) {
 			deactivate_plugins( $file );
 		}
@@ -206,7 +206,7 @@ class SB_Plugins_Controller {
 
 	// === Helpers ===
 
-	/** Найти "file" плагина (например, "custom-forms-sms/custom-forms-sms.php") по slug ("custom-forms-sms"). */
+	/** Resolve plugin "file" (e.g. "foo-bar/foo-bar.php") from a slug ("foo-bar"). */
 	private static function resolve_plugin_file_by_slug( $slug ) {
 		if ( ! function_exists( 'get_plugins' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/plugin.php';
@@ -216,7 +216,7 @@ class SB_Plugins_Controller {
 			if ( dirname( $file ) === $slug ) {
 				return $file;
 			}
-			// Однофайловые плагины — slug = basename без расширения
+			// Single-file plugins — slug = basename without extension
 			if ( dirname( $file ) === '.' && pathinfo( $file, PATHINFO_FILENAME ) === $slug ) {
 				return $file;
 			}

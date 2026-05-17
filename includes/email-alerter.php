@@ -1,9 +1,9 @@
 <?php
 /**
- * SB_Email_Alerter — email-уведомления на критичные события.
+ * SB_Email_Alerter — email notifications for critical events.
  *
- * Получатель — `SITE_BRIDGE_ALERT_EMAIL` или `admin_email` из настроек сайта.
- * Защита от спама: throttle через transients (не больше одного email на тип события в N минут).
+ * Recipient — `SITE_BRIDGE_ALERT_EMAIL` constant or the site's admin_email.
+ * Anti-spam: throttle via transients (max one email per event type per N minutes).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -12,29 +12,29 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class SB_Email_Alerter {
 
-	const THROTTLE_SECONDS = 600;  // 10 минут — минимум между однотипными письмами
+	const THROTTLE_SECONDS = 600;  // 10 minutes between identical alerts
 
-	/** Burst неудачных попыток auth (выход на бан). */
+	/** Burst of failed auth attempts (IP ban triggered). */
 	public static function auth_failure_burst( $ip, $count ) {
 		self::send(
 			'auth_burst',
-			'[Site Bridge] Burst неудачных auth-попыток',
-			"Site Bridge: на IP {$ip} зафиксировано {$count} неудачных попыток auth за окно. IP забанен на 1 час.\n\n"
-			. "Сайт: " . home_url() . "\n"
-			. "Время: " . current_time( 'mysql', true ) . " UTC"
+			'[Site Bridge] Burst of failed auth attempts',
+			"Site Bridge: {$count} failed auth attempts detected from IP {$ip} within the rate-limit window. The IP has been banned for 1 hour.\n\n"
+			. "Site: " . home_url() . "\n"
+			. "Time: " . current_time( 'mysql', true ) . " UTC"
 		);
 	}
 
-	/** Опасная операция (загрузка плагина, перезапись файла, восстановление). */
+	/** Dangerous operation (plugin install, file write, backup restore). */
 	public static function dangerous_op( $action, array $context = [] ) {
 		$ip = SB_Config::get_remote_ip();
-		$body = "Site Bridge: выполнена опасная операция.\n\n"
-			. "Действие: {$action}\n"
-			. "IP:       {$ip}\n"
-			. "Сайт:     " . home_url() . "\n"
-			. "Время:    " . current_time( 'mysql', true ) . " UTC\n\n";
+		$body = "Site Bridge: a dangerous operation was performed.\n\n"
+			. "Action: {$action}\n"
+			. "IP:     {$ip}\n"
+			. "Site:   " . home_url() . "\n"
+			. "Time:   " . current_time( 'mysql', true ) . " UTC\n\n";
 		if ( ! empty( $context ) ) {
-			$body .= "Контекст:\n" . wp_json_encode( $context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+			$body .= "Context:\n" . wp_json_encode( $context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 		}
 		self::send(
 			'dangerous_op_' . md5( $action ),
@@ -44,24 +44,24 @@ class SB_Email_Alerter {
 	}
 
 	/**
-	 * Внутренняя отправка с throttle.
+	 * Internal send with throttle.
 	 *
-	 * @param string $event_key   уникальный ключ для троттлинга
+	 * @param string $event_key   unique key for throttling
 	 * @param string $subject
 	 * @param string $body
 	 */
 	private static function send( $event_key, $subject, $body ) {
 		$to = SB_Config::get_alert_email();
 		if ( ! $to ) {
-			return; // некуда слать
+			return; // nowhere to send
 		}
 		$throttle_key = 'sb_alert_throttle_' . md5( $event_key );
 		if ( get_transient( $throttle_key ) ) {
-			return; // не слать слишком часто
+			return; // skip if recently sent
 		}
 		set_transient( $throttle_key, 1, self::THROTTLE_SECONDS );
 
-		// Тихая отправка — если wp_mail отвалится, не валим текущий REST-запрос
+		// Silent send — if wp_mail throws, don't break the current REST request
 		try {
 			@wp_mail( $to, $subject, $body, [ 'Content-Type: text/plain; charset=UTF-8' ] );
 		} catch ( \Throwable $e ) {

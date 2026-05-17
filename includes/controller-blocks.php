@@ -2,21 +2,21 @@
 /**
  * SB_Blocks_Controller — Gutenberg block-level API.
  *
- *  GET  /pages/{id}/blocks         — распарсенные блоки страницы (parse_blocks)
- *  PUT  /pages/{id}/blocks         — полная замена блоков (serialize_blocks → post_content)
+ *  GET  /pages/{id}/blocks         — parsed blocks of the page (parse_blocks)
+ *  PUT  /pages/{id}/blocks         — full block replacement (serialize_blocks → post_content)
  *
- * Структура одного блока (нативный WP-формат):
+ * Block structure (native WP format):
  *   {
- *     "blockName": "core/paragraph",                      // null для обычного HTML/freeform
- *     "attrs": {"align": "center", ...},                  // атрибуты блока (JSON)
- *     "innerBlocks": [...],                                // вложенные блоки (рекурсивно)
- *     "innerHTML": "<p>текст</p>",                         // HTML самого блока
- *     "innerContent": ["<p>текст</p>"]                     // массив фрагментов (между inner blocks)
+ *     "blockName": "core/paragraph",                      // null for plain HTML/freeform
+ *     "attrs": {"align": "center", ...},                  // block attributes (JSON)
+ *     "innerBlocks": [...],                                // nested blocks (recursive)
+ *     "innerHTML": "<p>text</p>",                          // HTML of the block itself
+ *     "innerContent": ["<p>text</p>"]                     // array of fragments (between inner blocks)
  *   }
  *
- * Работает на сайтах где Gutenberg используется. На Breakdance/Elementor-страницах
- * `post_content` обычно пустой (или содержит fallback) — будет вернётся пустой массив
- * или один блок типа `null` с минимальным content.
+ * Works on sites using Gutenberg. On Breakdance/Elementor-only pages `post_content`
+ * is typically empty (or contains a fallback) — the endpoint returns an empty array
+ * or a single freeform block.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -33,15 +33,15 @@ class SB_Blocks_Controller {
 			return SB_Response::not_found( 'Page' );
 		}
 
-		// parse_blocks — нативная WP-функция, доступна с WP 5.0+
+		// parse_blocks — native WP function, available since WP 5.0
 		$blocks = parse_blocks( $post->post_content );
 
-		// Удалим пустые "freeform" блоки которые parse_blocks вставляет между
-		// настоящими блоками (это служебные null-blocks с пробельным content).
+		// Drop empty "freeform" blocks that parse_blocks inserts between real blocks
+		// (these are auxiliary null-blocks with whitespace-only content).
 		$clean = array_values( array_filter( $blocks, function( $b ) {
-			if ( $b['blockName'] !== null ) return true;  // настоящий блок
+			if ( $b['blockName'] !== null ) return true;  // real block
 			$inner = trim( $b['innerHTML'] ?? '' );
-			return $inner !== '';                          // не-пустой freeform
+			return $inner !== '';                          // non-empty freeform
 		} ) );
 
 		return SB_Response::ok( [
@@ -63,8 +63,8 @@ class SB_Blocks_Controller {
 	 *     "notes": "..."
 	 *   }
 	 *
-	 * Замена ПОЛНОГО списка блоков → serialize_blocks() → post_content (direct SQL).
-	 * Auto-backup перед записью (если skip_backup !== true).
+	 * Full block-list replacement → serialize_blocks() → post_content (direct SQL).
+	 * Auto-backup before write (unless skip_backup === true).
 	 */
 	public static function put_blocks( WP_REST_Request $request ) {
 		$id   = (int) $request->get_param( 'id' );
@@ -77,7 +77,7 @@ class SB_Blocks_Controller {
 			return SB_Response::validation( 'Body must include "blocks": [...].' );
 		}
 
-		// Валидация каждого блока — должен иметь хотя бы blockName или innerHTML
+		// Validate each block — must have at least blockName or innerHTML
 		foreach ( $payload['blocks'] as $i => $b ) {
 			if ( ! is_array( $b ) ) {
 				return SB_Response::validation( "Block #{$i} is not an object." );
@@ -93,19 +93,19 @@ class SB_Blocks_Controller {
 			SB_Pages_Controller::create_snapshot( $post, 'auto-pre-edit', $notes );
 		}
 
-		// Сериализация
+		// Serialize
 		$new_content = serialize_blocks( $payload['blocks'] );
 
-		// Прямой SQL UPDATE wp_posts.post_content — минует wp_unslash и kses
+		// Direct SQL UPDATE on wp_posts.post_content — bypasses wp_unslash and kses
 		$ok = SB_Post::set_content_raw( $id, $new_content );
 		if ( ! $ok ) {
 			return SB_Response::internal( 'Direct UPDATE wp_posts failed.' );
 		}
 
-		// Инвалидация кэшей всех билдеров — на всякий случай (Breakdance/Elementor on the same site)
+		// Invalidate all builder caches just in case (Breakdance/Elementor on the same site)
 		SB_Meta::invalidate_builder_caches( $id );
 
-		// Re-parse чтобы вернуть user'у — он увидит то, что в итоге сохранилось
+		// Re-parse so the caller sees what was actually stored
 		$reparsed = parse_blocks( $new_content );
 
 		return SB_Response::ok( [

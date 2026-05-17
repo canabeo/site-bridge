@@ -72,21 +72,21 @@ class SB_System_Controller {
 	}
 
 	/**
-	 * Возвращает хвост error_log сайта.
-	 * Параметры: lines (1..2000, default 200).
+	 * Returns the tail of the site's error_log.
+	 * Parameters: lines (1..2000, default 200).
 	 */
 	public static function error_log( WP_REST_Request $request ) {
 		$lines = (int) ( $request->get_param( 'lines' ) ?: 200 );
 		$lines = max( 1, min( 2000, $lines ) );
 
-		// Поиск типичных мест error_log
+		// Search common error_log locations
 		$candidates = [
 			ABSPATH . 'error_log',
 			ABSPATH . '../error_log',
 			WP_CONTENT_DIR . '/debug.log',
 		];
 
-		// Также берём из ini_get('error_log') если задан
+		// Also try ini_get('error_log') if set
 		$ini_log = ini_get( 'error_log' );
 		if ( $ini_log && is_readable( $ini_log ) ) {
 			array_unshift( $candidates, $ini_log );
@@ -106,7 +106,7 @@ class SB_System_Controller {
 		return SB_Response::not_found( 'No accessible error_log' );
 	}
 
-	/** Чтение последних N строк файла без полной загрузки. */
+	/** Read the last N lines of a file without loading it entirely. */
 	private static function tail_file( $path, $lines ) {
 		$fp = fopen( $path, 'rb' );
 		if ( ! $fp ) {

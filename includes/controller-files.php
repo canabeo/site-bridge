@@ -1,24 +1,24 @@
 <?php
 /**
- * SB_Files_Controller — операции с файлами в ограниченных каталогах.
+ * SB_Files_Controller — file operations restricted to whitelisted directories.
  *
- * Whitelist (относительно ABSPATH):
- *   - wp-content/plugins/*       (read+write+delete, КРОМЕ wp-content/plugins/site-bridge/*)
+ * Whitelist (relative to ABSPATH):
+ *   - wp-content/plugins/*       (read+write+delete, EXCEPT wp-content/plugins/site-bridge/*)
  *   - wp-content/themes/*        (read+write+delete)
  *   - wp-content/uploads/*       (read+write+delete)
- *   - wp-content/mu-plugins/*    (read+write+delete) — ДА, разрешён,
- *                                  иначе не сможем чинить ситуации вроде «mu-plugin блокирует auth».
+ *   - wp-content/mu-plugins/*    (read+write+delete) — YES, allowed; otherwise we can't fix scenarios like
+ *                                  "a mu-plugin is blocking auth".
  *
- * Запрещено:
+ * Denied:
  *   - wp-admin/*
  *   - wp-includes/*
  *   - wp-config.php
- *   - .htaccess (на любом уровне) и любой dotfile в корне
- *   - сам каталог site-bridge (нельзя писать в свой собственный код через API
- *     — для self-update используется /plugins/upload с overwrite=true)
+ *   - .htaccess (at any level) and any dotfile at the root
+ *   - The site-bridge folder itself — can't edit our own code through this API.
+ *     For self-update use /plugins/upload with overwrite=true.
  *
- * Размер файла ≤ FILES_MAX_BYTES.
- * Перед записью или удалением — авто-бэкап в `wp-content/uploads/site-bridge-backups/{YYYY}/{MM}/{path}_{ts}.bak`.
+ * File size ≤ FILES_MAX_BYTES.
+ * An automatic backup is written to `wp-content/uploads/site-bridge-backups/{YYYY}/{MM}/{path}_{ts}.bak` before any write or delete.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -29,7 +29,7 @@ class SB_Files_Controller {
 
 	const FILES_MAX_BYTES = 20971520; // 20MB
 
-	/** Аллоулист (paths относительно ABSPATH, всегда заканчиваются на '/'). */
+	/** Whitelist (paths relative to ABSPATH, always end with '/'). */
 	private static function allowed_prefixes() {
 		return [
 			'wp-content/plugins/',
@@ -39,7 +39,7 @@ class SB_Files_Controller {
 		];
 	}
 
-	/** Запрещённый префикс — наш собственный каталог. */
+	/** Denied prefix — our own plugin directory. */
 	private static function denied_self_prefix() {
 		return 'wp-content/plugins/' . dirname( SITE_BRIDGE_BASENAME ) . '/';
 	}
@@ -110,7 +110,7 @@ class SB_Files_Controller {
 			}
 		}
 
-		// Бэкап если файл уже есть
+		// Back up if the file already exists
 		$backup_path = null;
 		if ( is_file( $abs ) ) {
 			$backup_path = self::backup_file( $abs, $rel );
@@ -121,7 +121,7 @@ class SB_Files_Controller {
 			return SB_Response::internal( 'file_put_contents failed.' );
 		}
 
-		// Опциональный chmod
+		// Optional chmod
 		if ( isset( $payload['mode'] ) ) {
 			@chmod( $abs, (int) $payload['mode'] );
 		}
@@ -161,7 +161,7 @@ class SB_Files_Controller {
 	/** GET /files/list?path=... */
 	public static function list_directory( WP_REST_Request $request ) {
 		$rel = self::normalize_path( $request->get_param( 'path' ) ?: 'wp-content/plugins' );
-		// Для list разрешаем читать каталоги — добавляем trailing slash при проверке
+		// For directory listing we allow reading dirs — append trailing slash before the check
 		$rel_for_check = rtrim( $rel, '/' ) . '/';
 		$check = self::validate_path_prefix( $rel_for_check );
 		if ( is_wp_error( $check ) ) {
@@ -189,15 +189,15 @@ class SB_Files_Controller {
 
 	private static function normalize_path( $path ) {
 		$p = (string) $path;
-		// убираем NUL-байты, нормализуем слэши, убираем ведущие слэши, поднимаем '../' атаки
+		// strip NUL bytes, normalise slashes, drop leading slashes, defuse '../' traversals
 		$p = str_replace( "\0", '', $p );
 		$p = str_replace( '\\', '/', $p );
 		$p = ltrim( $p, '/' );
-		// разрешим '..' проверять отдельно
+		// '..' is handled separately below
 		return $p;
 	}
 
-	/** Проверяет, что путь под одним из разрешённых префиксов и не задевает запрещённые. */
+	/** Verify the path falls under one of the allowed prefixes and isn't denied. */
 	private static function validate_path( $rel, $for_write ) {
 		if ( $rel === '' ) {
 			return SB_Response::validation( 'Empty path.' );
@@ -209,12 +209,12 @@ class SB_Files_Controller {
 	}
 
 	private static function validate_path_prefix( $rel ) {
-		// Защита от .htaccess / wp-config / dotfile в корне
+		// Block .htaccess / wp-config / dotfiles at root
 		$basename = basename( $rel );
 		if ( in_array( strtolower( $basename ), [ 'wp-config.php', '.htaccess', '.htpasswd', '.env' ], true ) ) {
 			return SB_Response::validation( 'Editing this file is denied by Site Bridge policy.' );
 		}
-		// Запрет на запись в собственный каталог
+		// Forbid writes into our own plugin directory
 		$self = self::denied_self_prefix();
 		if ( strpos( $rel, $self ) === 0 ) {
 			return SB_Response::validation( 'Cannot edit site-bridge own files via /files. Use /plugins/upload for self-update.' );
@@ -239,7 +239,7 @@ class SB_Files_Controller {
 	}
 
 	private static function looks_binary( $sample ) {
-		// Простая эвристика: если в первых 8KB много не-печатных байт — бинарь
+		// Simple heuristic: if many non-printable bytes appear in the first 8 KB → binary
 		if ( $sample === '' ) {
 			return false;
 		}

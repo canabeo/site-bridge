@@ -1,12 +1,14 @@
 <?php
 /**
- * SB_Forms_Controller — чтение данных из плагина custom-forms-sms.
+ * SB_Forms_Controller — reads data from the optional custom-forms-sms plugin.
  *
- * Соединяется с таблицами {prefix}cf_forms и {prefix}cf_submissions, созданными плагином
- * Custom Forms with SMS. Если этих таблиц нет — возвращает пустой результат с пометкой.
+ * Reads {prefix}cf_forms and {prefix}cf_submissions tables created by the
+ * Custom Forms with SMS plugin. If those tables don't exist, returns an empty
+ * result with `available: false`.
  *
- * Только READ-операции в v1. Удалять / редактировать заявки не надо — это историческая
- * запись лидов, которая должна жить как backup-канал на случай сбоев CRM (Planfix).
+ * READ-only operations in v1. Don't delete or edit submissions — they're a
+ * historical lead record that should remain as a backup channel in case CRM
+ * sync fails.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

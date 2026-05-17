@@ -1,9 +1,9 @@
 <?php
 /**
- * SB_REST — регистрация всех REST-маршрутов плагина под namespace sb/v1.
+ * SB_REST — registration of all REST routes under the sb/v1 namespace.
  *
- * Все маршруты используют permission_callback = [SB_Auth, 'check'] (HMAC).
- * После выполнения колбэка вызывается audit-логгер.
+ * Every route uses permission_callback = [SB_Auth, 'check'] (HMAC).
+ * After the callback runs, the audit logger is invoked.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -156,7 +156,7 @@ class SB_REST {
 			'callback'            => [ 'SB_Cache_Controller', 'purge' ],
 		] );
 
-		// === Forms (интеграция с custom-forms-sms) ===
+		// === Forms (optional integration with custom-forms-sms plugin) ===
 		register_rest_route( SITE_BRIDGE_REST_NAMESPACE, '/forms', [
 			'methods'             => 'GET',
 			'permission_callback' => $auth,
@@ -175,7 +175,7 @@ class SB_REST {
 			'callback'            => [ 'SB_Forms_Controller', 'get_submission' ],
 		] );
 
-		// === Audit-log писатель на каждом ответе ===
+		// === Audit-log writer on every response ===
 		add_filter( 'rest_post_dispatch', [ __CLASS__, 'maybe_log_response' ], 99, 3 );
 		add_filter( 'rest_pre_dispatch',  [ __CLASS__, 'mark_request_start' ], 1, 3 );
 	}

@@ -1,13 +1,13 @@
 <?php
 /**
- * SB_Installer — создание/обновление таблиц и опций при активации.
+ * SB_Installer — creates/upgrades database tables and options on plugin activation.
  *
- * Таблицы:
- *   {prefix}sb_audit          — журнал запросов
- *   {prefix}sb_page_backups   — снапшоты страниц перед редактированием
+ * Tables:
+ *   {prefix}sb_audit          — request log
+ *   {prefix}sb_page_backups   — page snapshots taken before edits
  *
- * Опция:
- *   site_bridge_db_version    — текущая версия схемы (для маршрутизации миграций в будущем)
+ * Option:
+ *   site_bridge_db_version    — current schema version (for future migrations)
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -23,7 +23,7 @@ class SB_Installer {
 
 	public static function activate() {
 		self::install_or_upgrade();
-		// Запланировать ежедневную чистку audit-логов
+		// Schedule daily audit log cleanup
 		if ( ! wp_next_scheduled( self::CRON_HOOK_CLEANUP ) ) {
 			wp_schedule_event( time() + 600, 'daily', self::CRON_HOOK_CLEANUP );
 		}
@@ -38,7 +38,7 @@ class SB_Installer {
 		if ( $current !== self::DB_VERSION ) {
 			self::install_or_upgrade();
 		}
-		// Подключаем cron-обработчик (на случай если активация не отрабатывала, например при ручной установке)
+		// Wire up the cron handler (in case activation didn't run, e.g. manual install)
 		add_action( self::CRON_HOOK_CLEANUP, [ 'SB_Audit', 'cleanup_old_records' ] );
 	}
 
@@ -93,7 +93,7 @@ class SB_Installer {
 		update_option( self::DB_VERSION_OPT, self::DB_VERSION );
 	}
 
-	/** Полное удаление: вызывается только из uninstall.php. */
+	/** Full removal — called only from uninstall.php. */
 	public static function drop_all() {
 		global $wpdb;
 		$audit_table   = $wpdb->prefix . SB_Audit::TABLE;

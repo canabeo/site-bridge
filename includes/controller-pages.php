@@ -1,12 +1,13 @@
 <?php
 /**
- * SB_Pages_Controller — операции со страницами WP.
+ * SB_Pages_Controller — operations on WP posts/pages.
  *
- * Поддерживает работу с любым post_type (по умолчанию 'page'), доступны 'post', 'page',
- * а также любой публичный custom post type. Контент Breakdance хранится в post meta
- * `breakdance_data` — он передаётся через поле `meta` в payload.
+ * Supports any post_type (default 'page'); 'post', 'page' and any public custom
+ * post type are accepted. Builder content (Breakdance `_breakdance_data`,
+ * Elementor `_elementor_data`) lives in post meta and is passed via the `meta`
+ * field of the request payload.
  *
- * Перед каждым PATCH автоматически создаётся бэкап в {prefix}sb_page_backups.
+ * An automatic backup is written to {prefix}sb_page_backups before every PATCH.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -15,12 +16,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class SB_Pages_Controller {
 
-	/** Максимум снапшотов на одну страницу — старшие удаляются. */
+	/** Maximum snapshots kept per page — older ones are pruned. */
 	const MAX_BACKUPS_PER_PAGE = 20;
 
-	/** Ключи post meta, которые мы возвращаем при чтении (всё что зарегистрировано в WP). */
+	/** Post types that may be listed/read by this controller. */
 	private static function readable_post_types() {
-		// Все публичные + 'page' и 'post' гарантированно
+		// All public types plus 'page' and 'post' guaranteed
 		$types = get_post_types( [], 'names' );
 		return array_values( array_unique( array_merge( [ 'page', 'post' ], (array) $types ) ) );
 	}
@@ -36,7 +37,7 @@ class SB_Pages_Controller {
 			'order'          => strtoupper( $request->get_param( 'order' ) ?: 'DESC' ),
 		];
 
-		// Валидация post_type
+		// Validate post_type
 		$allowed_types = self::readable_post_types();
 		if ( ! in_array( $args['post_type'], $allowed_types, true ) ) {
 			return SB_Response::validation( 'Invalid post_type.', [ 'allowed' => $allowed_types ] );
@@ -70,7 +71,7 @@ class SB_Pages_Controller {
 	/**
 	 * PATCH /pages/{id} — partial update.
 	 *
-	 * Принимает JSON:
+	 * Accepts JSON:
 	 * {
 	 *   "title":   "...",            // optional
 	 *   "slug":    "...",            // optional
@@ -78,8 +79,8 @@ class SB_Pages_Controller {
 	 *   "content": "...",            // optional, post_content
 	 *   "excerpt": "...",            // optional
 	 *   "meta":    { "breakdance_data": "...", "any_other_key": "..." },  // optional
-	 *   "skip_backup": false,        // ⚠️ по умолчанию false — авто-бэкап включён
-	 *   "notes":   "..."             // комментарий для бэкапа
+	 *   "skip_backup": false,        // default false — auto-backup is enabled
+	 *   "notes":   "..."             // comment recorded with the backup
 	 * }
 	 */
 	public static function update_page( WP_REST_Request $request ) {
@@ -94,7 +95,7 @@ class SB_Pages_Controller {
 			return SB_Response::validation( 'Body must be a JSON object.' );
 		}
 
-		// Определяем что вообще меняем — чтобы решать, нужен ли auto-backup
+		// Figure out what we're actually changing — drives the auto-backup decision
 		$post_field_map = [
 			'title'   => 'post_title',
 			'slug'    => 'post_name',
@@ -111,17 +112,17 @@ class SB_Pages_Controller {
 		$has_meta_writes = ! empty( $payload['meta'] ) && is_array( $payload['meta'] );
 		$has_any_write   = ! empty( $post_fields_to_write ) || $has_meta_writes;
 
-		// 1. Авто-бэкап — ВСЕГДА перед любой записью, если skip_backup явно не true.
-		// Раньше бэкап делался только при изменении meta — это был баг.
+		// 1. Auto-backup — ALWAYS before any write, unless skip_backup === true.
+		// (Earlier versions only backed up before meta changes — that was a bug.)
 		if ( $has_any_write && empty( $payload['skip_backup'] ) ) {
 			$notes = isset( $payload['notes'] ) ? (string) $payload['notes'] : 'auto-pre-edit';
 			self::create_snapshot( $post, 'auto-pre-edit', $notes );
 		}
 
-		// 2. Обновление wp_posts — через прямой SQL (SB_Post), минуя wp_unslash + kses.
-		// Это критично для Gutenberg-блочного HTML с JSON-атрибутами в комментариях
-		// (`<!-- wp:image {"id":123,"linkDestination":"..."} -->`), и для любых
-		// post_content с обратными слэшами, которые wp_update_post иначе бы повредил.
+		// 2. wp_posts updates — direct SQL via SB_Post, bypassing wp_unslash + kses.
+		// Critical for Gutenberg block HTML with JSON attributes in comments
+		// (`<!-- wp:image {"id":123,"linkDestination":"..."} -->`) and for any
+		// post_content containing backslashes that wp_update_post would otherwise mangle.
 		$changed = [];
 		if ( ! empty( $post_fields_to_write ) ) {
 			$ok = SB_Post::set_fields_raw( $id, $post_fields_to_write );
@@ -135,11 +136,12 @@ class SB_Pages_Controller {
 			}
 		}
 
-		// 3. Обновление meta — ВСЕГДА через прямой SQL (SB_Meta), минуя WP-layer.
-		// Причина: update_post_meta() вызывает wp_unslash(), который снимает один слой эскейпов.
-		// Для больших JSON-строк (`_breakdance_data`, `_elementor_data` с \uXXXX) это тихо портит данные.
+		// 3. Meta updates — ALWAYS via direct SQL (SB_Meta), bypassing the WP layer.
+		// Reason: update_post_meta() invokes wp_unslash(), which strips one backslash layer.
+		// For large JSON-in-meta blobs (`_breakdance_data`, `_elementor_data` with \uXXXX)
+		// this silently corrupts the stored bytes.
 		$meta_changed   = [];
-		$builder_touched = ! empty( $post_fields_to_write['post_content'] );  // изменили post_content — может быть Gutenberg
+		$builder_touched = ! empty( $post_fields_to_write['post_content'] );  // post_content changed — could be Gutenberg
 		if ( $has_meta_writes ) {
 			foreach ( $payload['meta'] as $key => $value ) {
 				$key_clean = sanitize_key( $key );
@@ -151,7 +153,7 @@ class SB_Pages_Controller {
 					: maybe_serialize( $value );
 				SB_Meta::set( $id, $key_clean, $store );
 				$meta_changed[] = $key_clean;
-				// Метаключи известных билдеров — Breakdance, Elementor, etc.
+				// Builder meta keys — Breakdance, Elementor, WPBakery
 				if ( strpos( $key_clean, '_breakdance' ) === 0
 				  || strpos( $key_clean, 'breakdance' ) === 0
 				  || strpos( $key_clean, '_elementor' ) === 0
@@ -161,12 +163,12 @@ class SB_Pages_Controller {
 			}
 		}
 
-		// 3b. Инвалидация кэшей builder'ов если меняли их данные ИЛИ post_content
+		// 3b. Invalidate builder caches if we touched their meta OR post_content
 		if ( $builder_touched ) {
 			SB_Meta::invalidate_builder_caches( $id );
 		}
 
-		// 4. Возвращаем обновлённую страницу
+		// 4. Return the updated post
 		clean_post_cache( $id );
 		$updated = get_post( $id );
 
@@ -179,15 +181,15 @@ class SB_Pages_Controller {
 	}
 
 	/**
-	 * Создание снапшота — вызывается также из SB_Backups_Controller для ручного бэкапа.
+	 * Create a snapshot — also called from SB_Backups_Controller for manual backups.
 	 */
 	public static function create_snapshot( WP_Post $post, $triggered_by, $notes = '' ) {
 		global $wpdb;
 		$table = $wpdb->prefix . 'sb_page_backups';
 
 		$meta_all = get_post_meta( $post->ID );
-		// $meta_all — массив [key => [val, val, ...]]; для single-meta берём первый элемент.
-		// Сериализуем как JSON — компактнее и читаемее, чем serialize().
+		// $meta_all has shape [key => [val, val, ...]]; for single-value meta we take the first.
+		// We serialize as JSON — more compact and human-readable than PHP serialize().
 		$wpdb->insert(
 			$table,
 			[
@@ -203,7 +205,7 @@ class SB_Pages_Controller {
 		);
 		$new_id = (int) $wpdb->insert_id;
 
-		// Чистка старых — оставляем только последние MAX_BACKUPS_PER_PAGE
+		// Prune old snapshots — keep only the last MAX_BACKUPS_PER_PAGE
 		$rows_to_delete = $wpdb->get_col( $wpdb->prepare(
 			"SELECT id FROM `$table` WHERE page_id = %d ORDER BY id DESC LIMIT 1000 OFFSET %d",
 			$post->ID, self::MAX_BACKUPS_PER_PAGE
@@ -233,7 +235,7 @@ class SB_Pages_Controller {
 
 	private static function full_post( WP_Post $p ) {
 		$meta = get_post_meta( $p->ID );
-		// Распаковываем single-value meta (значения — массивы по 1 элементу).
+		// Unwrap single-value meta (WP returns values as arrays of length 1).
 		$meta_flat = [];
 		foreach ( $meta as $key => $values ) {
 			$meta_flat[ $key ] = count( $values ) === 1 ? maybe_unserialize( $values[0] ) : array_map( 'maybe_unserialize', $values );

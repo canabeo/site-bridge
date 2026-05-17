@@ -1,18 +1,18 @@
 <?php
 /**
- * SB_Meta — прямой доступ к {prefix}postmeta минуя WP-layer.
+ * SB_Meta — direct access to the {prefix}postmeta table, bypassing the WP layer.
  *
- * Зачем: WP-функции update_post_meta() / add_post_meta() / delete_post_meta() выполняют
- * wp_unslash() и применяют фильтр sanitize_meta_$key. Для больших JSON-строк
- * (`_breakdance_data` ~ 500KB с экранированными \uXXXX) это приводит к потере
- * слэшей и тихой порче данных.
+ * Why: WP functions update_post_meta() / add_post_meta() / delete_post_meta()
+ * invoke wp_unslash() and apply the sanitize_meta_$key filter. For large JSON
+ * payloads (e.g. `_breakdance_data` ≈ 500 KB with `\uXXXX` escapes) this strips
+ * one backslash layer and silently corrupts the stored bytes.
  *
- * Эти helper-функции работают через $wpdb->update / insert / delete напрямую —
- * без unslash, без sanitize, без maybe_serialize.
+ * These helpers go straight through $wpdb->update / insert / delete — no
+ * unslash, no sanitize, no maybe_serialize.
  *
- * ВНИМАНИЕ: используя эти функции, мы берём на себя ответственность за валидность
- * данных. Применять только для доверенных API-входов (HMAC уже проверил), и только
- * там где WP-layer документировано портит данные.
+ * WARNING: by using these you assume responsibility for data validity. Use only
+ * for trusted API inputs (HMAC already verified them) and only where the WP layer
+ * is documented to corrupt data.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -22,8 +22,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 class SB_Meta {
 
 	/**
-	 * Запись meta-значения «как есть»: UPDATE если ключ существует (single instance), INSERT иначе.
-	 * Если у поста уже несколько значений с этим ключом — удаляет ВСЕ и вставляет одно.
+	 * Write a meta value "as is": UPDATE if the key already exists (single instance),
+	 * INSERT otherwise. If the post has multiple values under this key, all are
+	 * removed and a single new one is inserted.
 	 */
 	public static function set( $post_id, $key, $value ) {
 		global $wpdb;
@@ -32,7 +33,7 @@ class SB_Meta {
 			$post_id, $key
 		) );
 		if ( count( $rows ) > 1 ) {
-			// чистим лишние
+			// clean up the duplicates
 			$ids = implode( ',', array_map( 'intval', $rows ) );
 			$wpdb->query( "DELETE FROM {$wpdb->postmeta} WHERE meta_id IN ($ids)" );
 			$rows = [];
@@ -58,7 +59,7 @@ class SB_Meta {
 		}
 	}
 
-	/** Вставка нового meta-значения (без удаления существующих). Для multi-value meta. */
+	/** Insert a new meta row (without removing existing). For multi-value meta. */
 	public static function insert( $post_id, $key, $value ) {
 		global $wpdb;
 		$wpdb->insert(
@@ -72,7 +73,7 @@ class SB_Meta {
 		);
 	}
 
-	/** Удаление всех значений конкретного ключа для поста. */
+	/** Delete all values of a specific key for a post. */
 	public static function delete( $post_id, $key ) {
 		global $wpdb;
 		$wpdb->delete(
@@ -82,7 +83,7 @@ class SB_Meta {
 		);
 	}
 
-	/** Удаление ВСЕХ meta-полей поста. Используется в restore_backup. */
+	/** Delete ALL meta fields of a post. Used by restore_backup. */
 	public static function delete_all_for_post( $post_id ) {
 		global $wpdb;
 		$wpdb->delete(
@@ -93,18 +94,18 @@ class SB_Meta {
 	}
 
 	/**
-	 * Триггер пересборки кэшей всех известных билдеров после изменения контента поста.
+	 * Trigger rebuild of cached data for every known builder after a post's content changes.
 	 *
-	 * Удаляет meta-кэши и физические CSS-файлы для:
+	 * Removes meta caches and physical CSS files for:
 	 *  - Breakdance (`_breakdance_css_file_paths_cache`, `_breakdance_dependency_cache`,
 	 *    wp-content/uploads/breakdance/css/post-{id}.css)
 	 *  - Elementor (`_elementor_css`, wp-content/uploads/elementor/css/post-{id}.css)
 	 *  - WPBakery / VC (`_wpb_shortcodes_custom_css`)
 	 *
-	 * А также инвалидирует post-cache в WP, WP Rocket per-post, LiteSpeed per-post.
+	 * Also invalidates the post cache in WP, WP Rocket per-post, and LiteSpeed per-post.
 	 *
-	 * Безопасно вызывать на любом сайте: если билдер не используется, операции —
-	 * тихие no-op'ы (delete на отсутствующих meta, unlink на отсутствующих файлах).
+	 * Safe to call on any site: if a builder isn't in use, the operations are
+	 * silent no-ops (delete on missing meta, unlink on missing files).
 	 */
 	public static function invalidate_builder_caches( $post_id ) {
 		// — Breakdance —
@@ -130,7 +131,7 @@ class SB_Meta {
 		self::delete( $post_id, '_wpb_shortcodes_custom_css' );
 		self::delete( $post_id, '_wpb_post_custom_css' );
 
-		// Стандартный WP cache invalidation
+		// Standard WP cache invalidation
 		clean_post_cache( $post_id );
 
 		// WP Rocket per-post
@@ -145,8 +146,8 @@ class SB_Meta {
 	}
 
 	/**
-	 * Альяс для обратной совместимости (раньше функция называлась так).
-	 * @deprecated 1.0.2 Используйте invalidate_builder_caches().
+	 * Backward-compatible alias (function used to be named this way).
+	 * @deprecated 1.0.2 Use invalidate_builder_caches() instead.
 	 */
 	public static function invalidate_breakdance_caches( $post_id ) {
 		self::invalidate_builder_caches( $post_id );

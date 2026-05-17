@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Site Bridge
  * Plugin URI:  https://github.com/canabeo/site-bridge
- * Description: Programmatic, HMAC-signed REST API for managing WordPress sites: pages, plugins, files, cache, forms. Builder-agnostic — works with Breakdance, Elementor, Gutenberg, WPBakery.
+ * Description: Designed to let any AI agent safely manage and edit your WordPress site. Exposes an HMAC-signed REST API for pages, plugins, files, cache and forms. Builder-agnostic — works with Breakdance, Elementor, Gutenberg, and WPBakery.
  * Version:     1.0.2
  * Author:      Canabeo
  * Author URI:  https://github.com/canabeo
@@ -24,8 +24,8 @@ define( 'SITE_BRIDGE_URL',     plugin_dir_url( __FILE__ ) );
 define( 'SITE_BRIDGE_BASENAME', plugin_basename( __FILE__ ) );
 define( 'SITE_BRIDGE_REST_NAMESPACE', 'sb/v1' );
 
-// Killswitch — мгновенно выключает всю логику плагина, оставляя только заглушки на REST.
-// Включается через `define('SITE_BRIDGE_DISABLED', true);` в wp-config.php.
+// Killswitch — instantly disables all plugin logic, leaving only stub REST routes.
+// Toggle via `define('SITE_BRIDGE_DISABLED', true);` in wp-config.php.
 if ( defined( 'SITE_BRIDGE_DISABLED' ) && SITE_BRIDGE_DISABLED === true ) {
 	add_action( 'rest_api_init', function() {
 		register_rest_route( SITE_BRIDGE_REST_NAMESPACE, '/(?P<any>.*)', [
@@ -39,7 +39,7 @@ if ( defined( 'SITE_BRIDGE_DISABLED' ) && SITE_BRIDGE_DISABLED === true ) {
 	return;
 }
 
-// Подключение модулей
+// Module includes
 require_once SITE_BRIDGE_DIR . 'includes/config.php';
 require_once SITE_BRIDGE_DIR . 'includes/installer.php';
 require_once SITE_BRIDGE_DIR . 'includes/audit.php';
@@ -58,16 +58,15 @@ require_once SITE_BRIDGE_DIR . 'includes/controller-files.php';
 require_once SITE_BRIDGE_DIR . 'includes/controller-cache.php';
 require_once SITE_BRIDGE_DIR . 'includes/controller-forms.php';
 
-// Хуки активации/деактивации
+// Activation / deactivation hooks
 register_activation_hook( __FILE__, [ 'SB_Installer', 'activate' ] );
 register_deactivation_hook( __FILE__, [ 'SB_Installer', 'deactivate' ] );
 
-// Регистрация REST-маршрутов
+// REST route registration
 add_action( 'rest_api_init', [ 'SB_REST', 'register_routes' ] );
 
-// Гарантия, что таблицы существуют (на случай обновления плагина)
+// Ensure tables exist (in case the plugin was upgraded by file replacement)
 add_action( 'plugins_loaded', [ 'SB_Installer', 'maybe_upgrade' ] );
 
-// Регистрируем breakdance_data в REST API meta (требуется для PATCH meta через cc)
-// Не используем show_in_rest=true в register_post_meta — мы читаем/пишем сами через get_post_meta/update_post_meta.
-// Этот блок остаётся как комментарий: смотри SB_Pages_Controller::update_meta().
+// Note: we do NOT use register_post_meta(show_in_rest=true) — meta is read/written
+// directly via get_post_meta / SB_Meta. See SB_Pages_Controller::update_page().

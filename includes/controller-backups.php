@@ -1,9 +1,9 @@
 <?php
 /**
- * SB_Backups_Controller — ручные операции с снапшотами страниц.
+ * SB_Backups_Controller — manual operations on page snapshots.
  *
- * Авто-снапшоты создаются в SB_Pages_Controller перед каждым PATCH /pages/{id}.
- * Здесь — ручное создание, список и восстановление.
+ * Auto-snapshots are created in SB_Pages_Controller before every PATCH /pages/{id}.
+ * This controller handles manual create, list, and restore.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -76,11 +76,11 @@ class SB_Backups_Controller {
 			return SB_Response::not_found( 'Backup' );
 		}
 
-		// Создаём pre-restore snapshot — чтобы можно было откатить и сам restore
+		// Create a pre-restore snapshot so the restore itself can be rolled back
 		SB_Pages_Controller::create_snapshot( $post, 'auto-pre-restore', 'pre-restore #' . $backup_id );
 
-		// Обновляем post-поля через прямой SQL — чтобы wp_unslash не повредил
-		// post_content с обратными слэшами (Gutenberg block attrs etc.)
+		// Write post fields via direct SQL so wp_unslash doesn't corrupt post_content
+		// that contains backslashes (Gutenberg block attributes etc.)
 		$ok = SB_Post::set_fields_raw( $id, [
 			'post_title'   => $backup['title_snapshot'],
 			'post_content' => $backup['content_snapshot'],
@@ -89,28 +89,28 @@ class SB_Backups_Controller {
 			return SB_Response::internal( 'Direct UPDATE wp_posts failed.' );
 		}
 
-		// Восстанавливаем meta через прямой SQL (см. SB_Meta — почему).
+		// Restore meta via direct SQL (see SB_Meta for the rationale).
 		$meta = json_decode( $backup['meta_snapshot'], true );
 		$restored_keys = [];
 		if ( is_array( $meta ) ) {
-			// Удаляем все meta которые есть сейчас (включая добавленные ПОСЛЕ snapshot'a)
+			// Drop all current meta (including keys added AFTER the snapshot was taken)
 			SB_Meta::delete_all_for_post( $id );
 
-			// Восстанавливаем из snapshot — значение пишется как есть, без unslash и фильтров
+			// Restore from snapshot — values are written as-is, no unslash, no filters
 			foreach ( $meta as $key => $values ) {
 				if ( ! is_array( $values ) ) {
 					$values = [ $values ];
 				}
 				foreach ( $values as $v ) {
-					// $v — строка из json_decode, точно такой же байт-в-байт, как был в БД
+					// $v is the json_decode'd string — byte-for-byte identical to what was in the DB
 					SB_Meta::insert( $id, (string) $key, (string) $v );
 				}
 				$restored_keys[] = $key;
 			}
 		}
 
-		// Инвалидация кэшей всех известных билдеров после восстановления — на случай если
-		// в их кэшах остались артефакты от испорченных правок
+		// Invalidate all known builder caches after restore — in case stale artifacts
+		// from the bad edit are still in their caches
 		SB_Meta::invalidate_builder_caches( $id );
 
 		clean_post_cache( $id );
