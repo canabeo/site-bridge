@@ -1,0 +1,13 @@
+{
+  "_comment": "Save as ~/.sb-sites.json (or anywhere; point SB_SITES_CONFIG env var at it). NEVER commit the real file to git.",
+  "sites": {
+    "production": {
+      "url": "https://example.com",
+      "site_bridge_secret": "REPLACE-WITH-VALUE-FROM-WP-CONFIG-SITE_BRIDGE_SECRET-CONSTANT"
+    },
+    "staging": {
+      "url": "https://staging.example.com",
+      "site_bridge_secret": "DIFFERENT-SECRET-PER-SITE-ALWAYS"
+    }
+  }
+}

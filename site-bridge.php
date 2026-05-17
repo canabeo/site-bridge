@@ -1,11 +1,13 @@
 <?php
 /**
  * Plugin Name: Site Bridge
- * Plugin URI:  https://alumservis.com.ua/
- * Description: Безопасный программный доступ к WordPress-сайту через HMAC-подписанный REST API. Pages, plugins, files, cache, forms.
+ * Plugin URI:  https://github.com/canabeo/site-bridge
+ * Description: Programmatic, HMAC-signed REST API for managing WordPress sites: pages, plugins, files, cache, forms. Builder-agnostic — works with Breakdance, Elementor, Gutenberg, WPBakery.
  * Version:     1.0.2
  * Author:      Canabeo
+ * Author URI:  https://github.com/canabeo
  * License:     GPL v2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: site-bridge
  * Requires PHP: 7.4
  * Requires at least: 6.2

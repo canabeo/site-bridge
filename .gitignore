@@ -6,13 +6,21 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Editor swap
+# Editor swap files
 *~
 *.swp
 *.bak
 
-# Local secrets — should NEVER be committed.
-# Реальные секреты живут в wp-config.php на каждом сайте,
-# а тестовые/локальные — в wordpress-sites.json который лежит вне репо.
+# Build artifacts
+/builds/
+*.zip
+
+# Local secrets — NEVER commit:
+#   - Real site secrets live in wp-config.php on each site (not in the repo)
+#   - Local client config lives in ~/.sb-sites.json or wherever
+#     SB_SITES_CONFIG points (not in the repo)
 *.secret
 *.env
+.sb-sites.json
+sb-sites.json
+wordpress-sites.json

@@ -1,33 +1,38 @@
 #!/usr/bin/env python3
 """
-Site Bridge — Python client.
+Site Bridge — reference Python client.
 
-Reads per-site secrets from wordpress-sites.json (in the Alumservice working dir):
+Reads per-site secrets from a JSON config file. By default, ~/.sb-sites.json,
+overridable via SB_SITES_CONFIG environment variable or constructor argument.
+
+Config format:
 
     {
       "sites": {
-        "alumservis": {
-          "url": "https://alumservis.com.ua",
-          "site_bridge_secret": "<64+ char random>"
-          ...
+        "my-site": {
+          "url": "https://example.com",
+          "site_bridge_secret": "<64+ char random — same value as SITE_BRIDGE_SECRET in wp-config.php>"
         },
-        ...
+        "staging": {
+          "url": "https://staging.example.com",
+          "site_bridge_secret": "..."
+        }
       }
     }
 
-Usage:
+Usage (Python):
     from sb_client import SiteBridge
-    sb = SiteBridge("alumservis")
+    sb = SiteBridge("my-site")
     print(sb.ping())
-    page = sb.get_page(1580)
-    sb.update_page(1580, meta={"breakdance_data": "..."})
+    page = sb.get_page(123)
+    sb.update_page(123, content="<p>New content</p>")
 
 CLI:
-    python sb_client.py alumservis ping
-    python sb_client.py alumservis info
-    python sb_client.py alumservis pages list --per_page=5
-    python sb_client.py alumservis pages get 1580
-    python sb_client.py alumservis audit
+    python sb_client.py my-site ping
+    python sb_client.py my-site info
+    python sb_client.py my-site pages-list --per_page=5
+    python sb_client.py my-site page-get 123
+    python sb_client.py my-site audit --limit=20
 """
 
 from __future__ import annotations
@@ -46,7 +51,15 @@ from urllib import request as urlrequest
 from urllib.error import HTTPError, URLError
 
 
-DEFAULT_CONFIG_PATH = Path.home() / "Документы" / "Alumservice" / "wordpress-sites.json"
+def _default_config_path() -> Path:
+    """Resolve config path: $SB_SITES_CONFIG, then ~/.sb-sites.json."""
+    env = os.environ.get("SB_SITES_CONFIG")
+    if env:
+        return Path(env)
+    return Path.home() / ".sb-sites.json"
+
+
+DEFAULT_CONFIG_PATH = _default_config_path()
 
 
 class SiteBridgeError(Exception):
