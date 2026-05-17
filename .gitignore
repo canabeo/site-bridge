@@ -1,0 +1,18 @@
+# Python client cache
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor swap
+*~
+*.swp
+*.bak
+
+# Local secrets — should NEVER be committed.
+# Реальные секреты живут в wp-config.php на каждом сайте,
+# а тестовые/локальные — в wordpress-sites.json который лежит вне репо.
+*.secret
+*.env
