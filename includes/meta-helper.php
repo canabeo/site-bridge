@@ -93,41 +93,62 @@ class SB_Meta {
 	}
 
 	/**
-	 * Триггер пересборки Breakdance после изменения _breakdance_data.
+	 * Триггер пересборки кэшей всех известных билдеров после изменения контента поста.
 	 *
-	 * Breakdance кэширует pre-rendered CSS в файлах wp-content/uploads/breakdance/css/post-{ID}.css
-	 * и хранит их пути в meta `_breakdance_css_file_paths_cache`. После изменения дерева
-	 * нужно очистить кэш-meta + дать Breakdance возможность перегенерировать.
+	 * Удаляет meta-кэши и физические CSS-файлы для:
+	 *  - Breakdance (`_breakdance_css_file_paths_cache`, `_breakdance_dependency_cache`,
+	 *    wp-content/uploads/breakdance/css/post-{id}.css)
+	 *  - Elementor (`_elementor_css`, wp-content/uploads/elementor/css/post-{id}.css)
+	 *  - WPBakery / VC (`_wpb_shortcodes_custom_css`)
 	 *
-	 * Также инвалидируем post cache в object cache и сторонних кэшах.
+	 * А также инвалидирует post-cache в WP, WP Rocket per-post, LiteSpeed per-post.
+	 *
+	 * Безопасно вызывать на любом сайте: если билдер не используется, операции —
+	 * тихие no-op'ы (delete на отсутствующих meta, unlink на отсутствующих файлах).
 	 */
-	public static function invalidate_breakdance_caches( $post_id ) {
-		// Удалим CSS-кэш meta — Breakdance пересоберёт на следующем рендере
+	public static function invalidate_builder_caches( $post_id ) {
+		// — Breakdance —
 		self::delete( $post_id, '_breakdance_css_file_paths_cache' );
 		self::delete( $post_id, '_breakdance_dependency_cache' );
-
-		// Удалим физические CSS-файлы — самое надёжное
-		$uploads_dir = WP_CONTENT_DIR . '/uploads/breakdance/css/';
-		if ( is_dir( $uploads_dir ) ) {
+		$bd_dir = WP_CONTENT_DIR . '/uploads/breakdance/css/';
+		if ( is_dir( $bd_dir ) ) {
 			foreach ( [ "post-{$post_id}.css", "post-{$post_id}-defaults.css" ] as $fname ) {
-				$full = $uploads_dir . $fname;
-				if ( is_file( $full ) ) {
-					@unlink( $full );
-				}
+				$full = $bd_dir . $fname;
+				if ( is_file( $full ) ) @unlink( $full );
 			}
 		}
+
+		// — Elementor —
+		self::delete( $post_id, '_elementor_css' );
+		$el_dir = WP_CONTENT_DIR . '/uploads/elementor/css/';
+		if ( is_dir( $el_dir ) ) {
+			$el_file = $el_dir . "post-{$post_id}.css";
+			if ( is_file( $el_file ) ) @unlink( $el_file );
+		}
+
+		// — WPBakery / Visual Composer —
+		self::delete( $post_id, '_wpb_shortcodes_custom_css' );
+		self::delete( $post_id, '_wpb_post_custom_css' );
 
 		// Стандартный WP cache invalidation
 		clean_post_cache( $post_id );
 
-		// WP Rocket — очистим страницу по URL если плагин активен
+		// WP Rocket per-post
 		if ( function_exists( 'rocket_clean_post' ) ) {
 			rocket_clean_post( $post_id );
 		}
 
-		// LiteSpeed Cache
+		// LiteSpeed Cache per-post
 		if ( has_action( 'litespeed_purge_post' ) ) {
 			do_action( 'litespeed_purge_post', $post_id );
 		}
+	}
+
+	/**
+	 * Альяс для обратной совместимости (раньше функция называлась так).
+	 * @deprecated 1.0.2 Используйте invalidate_builder_caches().
+	 */
+	public static function invalidate_breakdance_caches( $post_id ) {
+		self::invalidate_builder_caches( $post_id );
 	}
 }

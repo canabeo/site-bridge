@@ -3,7 +3,7 @@
  * Plugin Name: Site Bridge
  * Plugin URI:  https://alumservis.com.ua/
  * Description: Безопасный программный доступ к WordPress-сайту через HMAC-подписанный REST API. Pages, plugins, files, cache, forms.
- * Version:     1.0.1
+ * Version:     1.0.2
  * Author:      Canabeo
  * License:     GPL v2 or later
  * Text Domain: site-bridge
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SITE_BRIDGE_VERSION', '1.0.1' );
+define( 'SITE_BRIDGE_VERSION', '1.0.2' );
 define( 'SITE_BRIDGE_FILE',    __FILE__ );
 define( 'SITE_BRIDGE_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'SITE_BRIDGE_URL',     plugin_dir_url( __FILE__ ) );
@@ -42,6 +42,7 @@ require_once SITE_BRIDGE_DIR . 'includes/config.php';
 require_once SITE_BRIDGE_DIR . 'includes/installer.php';
 require_once SITE_BRIDGE_DIR . 'includes/audit.php';
 require_once SITE_BRIDGE_DIR . 'includes/meta-helper.php';
+require_once SITE_BRIDGE_DIR . 'includes/post-helper.php';
 require_once SITE_BRIDGE_DIR . 'includes/email-alerter.php';
 require_once SITE_BRIDGE_DIR . 'includes/auth.php';
 require_once SITE_BRIDGE_DIR . 'includes/response.php';
@@ -49,6 +50,7 @@ require_once SITE_BRIDGE_DIR . 'includes/rest.php';
 require_once SITE_BRIDGE_DIR . 'includes/controller-system.php';
 require_once SITE_BRIDGE_DIR . 'includes/controller-pages.php';
 require_once SITE_BRIDGE_DIR . 'includes/controller-backups.php';
+require_once SITE_BRIDGE_DIR . 'includes/controller-blocks.php';
 require_once SITE_BRIDGE_DIR . 'includes/controller-plugins.php';
 require_once SITE_BRIDGE_DIR . 'includes/controller-files.php';
 require_once SITE_BRIDGE_DIR . 'includes/controller-cache.php';

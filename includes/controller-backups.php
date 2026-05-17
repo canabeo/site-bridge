@@ -79,14 +79,14 @@ class SB_Backups_Controller {
 		// Создаём pre-restore snapshot — чтобы можно было откатить и сам restore
 		SB_Pages_Controller::create_snapshot( $post, 'auto-pre-restore', 'pre-restore #' . $backup_id );
 
-		// Обновляем post-поля
-		$res = wp_update_post( [
-			'ID'           => $id,
+		// Обновляем post-поля через прямой SQL — чтобы wp_unslash не повредил
+		// post_content с обратными слэшами (Gutenberg block attrs etc.)
+		$ok = SB_Post::set_fields_raw( $id, [
 			'post_title'   => $backup['title_snapshot'],
 			'post_content' => $backup['content_snapshot'],
-		], true );
-		if ( is_wp_error( $res ) ) {
-			return SB_Response::internal( 'wp_update_post failed: ' . $res->get_error_message() );
+		] );
+		if ( ! $ok ) {
+			return SB_Response::internal( 'Direct UPDATE wp_posts failed.' );
 		}
 
 		// Восстанавливаем meta через прямой SQL (см. SB_Meta — почему).
@@ -109,9 +109,9 @@ class SB_Backups_Controller {
 			}
 		}
 
-		// Инвалидация Breakdance-кэшей после восстановления — на случай если в кэше остались
-		// артефакты от испорченных правок
-		SB_Meta::invalidate_breakdance_caches( $id );
+		// Инвалидация кэшей всех известных билдеров после восстановления — на случай если
+		// в их кэшах остались артефакты от испорченных правок
+		SB_Meta::invalidate_builder_caches( $id );
 
 		clean_post_cache( $id );
 

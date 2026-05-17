@@ -11,6 +11,16 @@ HMAC-подписью, который WAF не воспринимает как l
 
 ## Changelog
 
+### 1.0.2 — 2026-05-17 (Gutenberg + Elementor support)
+
+- ➕ **Gutenberg block-level API**:
+  - `GET /pages/{id}/blocks` — распарсенные блоки страницы через `parse_blocks()`
+  - `PUT /pages/{id}/blocks` — полная замена списка блоков → `serialize_blocks()` → `post_content` (direct SQL)
+- 🐛 **Fix: `wp_unslash` для `post_content`**. `wp_update_post()` тоже снимает один слой эскейпов, что ломает Gutenberg block-атрибуты в JSON-комментариях (`<!-- wp:image {"id":123,"linkDestination":"..."} -->`) и любой post_content с обратными слэшами. Теперь `update_page` для полей `title`/`content`/`slug`/`status`/`excerpt` использует новый `SB_Post::set_fields_raw()` — прямой SQL UPDATE в `wp_posts` минуя WP-layer.
+- 🐛 **Fix: auto-backup теперь всегда** перед любой записью, не только при изменении meta. Раньше PATCH с одним `content` (без `meta`) проходил без бэкапа — это был баг.
+- ➕ **Generalized builder cache invalidation**: `SB_Meta::invalidate_builder_caches()` теперь обрабатывает кэши **Breakdance, Elementor, WPBakery** одной функцией. Срабатывает на изменение `_breakdance_*`, `_elementor_*`, `_wpb_*` meta или на любой `post_content`. Старая `invalidate_breakdance_caches()` оставлена как alias для совместимости.
+- 🐛 **Fix: `restore_backup` восстанавливает `post_content` через `SB_Post`** (direct SQL), не через `wp_update_post`. Чтобы wp_unslash не повредил восстановленные байты.
+
 ### 1.0.1 — 2026-05-17 (hotfix)
 
 - 🐛 **Critical fix**: `update_page` / `restore_backup` теряли данные при работе с большими JSON-meta (`_breakdance_data`). Причина — `wp_unslash()` внутри `update_post_meta()` снимает escape-слэши JSON. Теперь meta-запись идёт через прямой SQL в `wp_postmeta` (`SB_Meta` helper) минуя WP-layer.

@@ -60,6 +60,20 @@ class SB_REST {
 			],
 		] );
 
+		// === Blocks (Gutenberg) ===
+		register_rest_route( SITE_BRIDGE_REST_NAMESPACE, '/pages/(?P<id>\d+)/blocks', [
+			[
+				'methods'             => 'GET',
+				'permission_callback' => $auth,
+				'callback'            => [ 'SB_Blocks_Controller', 'get_blocks' ],
+			],
+			[
+				'methods'             => 'PUT',
+				'permission_callback' => $auth,
+				'callback'            => [ 'SB_Blocks_Controller', 'put_blocks' ],
+			],
+		] );
+
 		// === Backups ===
 		register_rest_route( SITE_BRIDGE_REST_NAMESPACE, '/pages/(?P<id>\d+)/backup', [
 			'methods'             => 'POST',

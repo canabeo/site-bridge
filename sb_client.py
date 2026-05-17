@@ -186,6 +186,14 @@ class SiteBridge:
     def restore_backup(self, page_id: int, backup_id: int):
         return self.request("POST", f"/pages/{page_id}/restore/{backup_id}")
 
+    # Gutenberg blocks (v1.0.2)
+    def get_blocks(self, page_id: int):
+        return self.request("GET", f"/pages/{page_id}/blocks")
+
+    def put_blocks(self, page_id: int, blocks: list, *, skip_backup: bool = False, notes: str = ""):
+        body = {"blocks": blocks, "skip_backup": skip_backup, "notes": notes}
+        return self.request("PUT", f"/pages/{page_id}/blocks", json_body=body)
+
     # Plugins
     def list_plugins(self):
         return self.request("GET", "/plugins")

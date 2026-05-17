@@ -94,63 +94,76 @@ class SB_Pages_Controller {
 			return SB_Response::validation( 'Body must be a JSON object.' );
 		}
 
-		// 1. Авто-бэкап (если не явно отключён)
-		if ( empty( $payload['skip_backup'] ) ) {
+		// Определяем что вообще меняем — чтобы решать, нужен ли auto-backup
+		$post_field_map = [
+			'title'   => 'post_title',
+			'slug'    => 'post_name',
+			'status'  => 'post_status',
+			'content' => 'post_content',
+			'excerpt' => 'post_excerpt',
+		];
+		$post_fields_to_write = [];
+		foreach ( $post_field_map as $api_key => $db_field ) {
+			if ( array_key_exists( $api_key, $payload ) ) {
+				$post_fields_to_write[ $db_field ] = $payload[ $api_key ];
+			}
+		}
+		$has_meta_writes = ! empty( $payload['meta'] ) && is_array( $payload['meta'] );
+		$has_any_write   = ! empty( $post_fields_to_write ) || $has_meta_writes;
+
+		// 1. Авто-бэкап — ВСЕГДА перед любой записью, если skip_backup явно не true.
+		// Раньше бэкап делался только при изменении meta — это был баг.
+		if ( $has_any_write && empty( $payload['skip_backup'] ) ) {
 			$notes = isset( $payload['notes'] ) ? (string) $payload['notes'] : 'auto-pre-edit';
 			self::create_snapshot( $post, 'auto-pre-edit', $notes );
 		}
 
-		// 2. Обновление wp_posts
-		$post_update = [ 'ID' => $id ];
+		// 2. Обновление wp_posts — через прямой SQL (SB_Post), минуя wp_unslash + kses.
+		// Это критично для Gutenberg-блочного HTML с JSON-атрибутами в комментариях
+		// (`<!-- wp:image {"id":123,"linkDestination":"..."} -->`), и для любых
+		// post_content с обратными слэшами, которые wp_update_post иначе бы повредил.
 		$changed = [];
-		foreach ( [ 'title', 'slug', 'status', 'content', 'excerpt' ] as $field ) {
-			if ( array_key_exists( $field, $payload ) ) {
-				$map = [
-					'title'   => 'post_title',
-					'slug'    => 'post_name',
-					'status'  => 'post_status',
-					'content' => 'post_content',
-					'excerpt' => 'post_excerpt',
-				];
-				$post_update[ $map[ $field ] ] = $payload[ $field ];
-				$changed[] = $field;
+		if ( ! empty( $post_fields_to_write ) ) {
+			$ok = SB_Post::set_fields_raw( $id, $post_fields_to_write );
+			if ( ! $ok ) {
+				return SB_Response::internal( 'Direct UPDATE wp_posts failed.' );
 			}
-		}
-
-		if ( count( $post_update ) > 1 ) {
-			$res = wp_update_post( $post_update, true );
-			if ( is_wp_error( $res ) ) {
-				return SB_Response::internal( 'wp_update_post failed: ' . $res->get_error_message() );
+			foreach ( $post_field_map as $api_key => $db_field ) {
+				if ( array_key_exists( $db_field, $post_fields_to_write ) ) {
+					$changed[] = $api_key;
+				}
 			}
 		}
 
 		// 3. Обновление meta — ВСЕГДА через прямой SQL (SB_Meta), минуя WP-layer.
 		// Причина: update_post_meta() вызывает wp_unslash(), который снимает один слой эскейпов.
-		// Для больших JSON-строк (`_breakdance_data` с \uXXXX) это тихо портит данные.
-		$meta_changed       = [];
-		$breakdance_touched = false;
-		if ( ! empty( $payload['meta'] ) && is_array( $payload['meta'] ) ) {
+		// Для больших JSON-строк (`_breakdance_data`, `_elementor_data` с \uXXXX) это тихо портит данные.
+		$meta_changed   = [];
+		$builder_touched = ! empty( $post_fields_to_write['post_content'] );  // изменили post_content — может быть Gutenberg
+		if ( $has_meta_writes ) {
 			foreach ( $payload['meta'] as $key => $value ) {
 				$key_clean = sanitize_key( $key );
 				if ( $key_clean === '' ) {
 					continue;
 				}
-				// Для массивов/объектов используем maybe_serialize (WP-конвенция хранения).
-				// Для строк/чисел — кладём как есть, БЕЗ unslash.
 				$store = is_scalar( $value ) || $value === null
 					? (string) $value
 					: maybe_serialize( $value );
 				SB_Meta::set( $id, $key_clean, $store );
 				$meta_changed[] = $key_clean;
-				if ( strpos( $key_clean, '_breakdance' ) === 0 || strpos( $key_clean, 'breakdance' ) === 0 ) {
-					$breakdance_touched = true;
+				// Метаключи известных билдеров — Breakdance, Elementor, etc.
+				if ( strpos( $key_clean, '_breakdance' ) === 0
+				  || strpos( $key_clean, 'breakdance' ) === 0
+				  || strpos( $key_clean, '_elementor' ) === 0
+				  || strpos( $key_clean, '_wpb_' ) === 0 ) {
+					$builder_touched = true;
 				}
 			}
 		}
 
-		// 3b. Инвалидация Breakdance-кэшей если меняли что-то из его меты
-		if ( $breakdance_touched ) {
-			SB_Meta::invalidate_breakdance_caches( $id );
+		// 3b. Инвалидация кэшей builder'ов если меняли их данные ИЛИ post_content
+		if ( $builder_touched ) {
+			SB_Meta::invalidate_builder_caches( $id );
 		}
 
 		// 4. Возвращаем обновлённую страницу
