@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] — 2026-05-19
+
+### Added
+- **Code Snippets plugin integration** — CRUD over the [`code-snippets`](https://wordpress.org/plugins/code-snippets/) plugin. When `code-snippets` is installed and active, these endpoints become available:
+  - `GET /snippets[?scope=…&active=…]` — list, optional filter by scope or active state
+  - `GET /snippets/{id}` — fetch one snippet (includes full `code`)
+  - `POST /snippets` — create
+  - `PATCH /snippets/{id}` — partial update (any field)
+  - `DELETE /snippets/{id}` — delete (blocked if `locked`)
+  - `POST /snippets/{id}/activate` — set active (runs `Code_Snippets\activate_snippet`, which validates PHP code first)
+  - `POST /snippets/{id}/deactivate`
+- All writes go through Code Snippets' own public functions (`save_snippet`, `activate_snippet`, `deactivate_snippet`, `delete_snippet`) so that the plugin's caches, code validation, and `do_action` hooks fire normally.
+- New `sb_client.py` methods: `list_snippets`, `get_snippet`, `create_snippet`, `update_snippet`, `delete_snippet`, `activate_snippet_cs`, `deactivate_snippet_cs`, and CLI subcommands `snippets-list` / `snippet-get`.
+- If `code-snippets` is not installed/active, endpoints return `503 sb_dep_missing` instead of a generic error.
+- Supports both Code Snippets v3.x (`Code_Snippets\Snippet`) and master/dev (`Code_Snippets\Model\Snippet`) class layouts.
+- **WAF-bypass for snippet code** — `POST` / `PATCH` `/snippets` accept an optional `code_b64` field (base64-encoded `code`). Required when the host's WAF (Really Simple Security, Wordfence) blocks request bodies containing patterns like `<script>` or `document.createElement` — common for analytics / tag-manager snippets. `sb_client.create_snippet(..., use_b64=True)` does the encoding automatically.
+
 ## [1.0.2] — 2026-05-17
 
 ### Added

@@ -92,7 +92,7 @@ Send `GET /sb/v1/ping`. Expected 200 response:
 {
   "status": "ok",
   "plugin": "site-bridge",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "wp_version": "6.x",
   "php_version": "7.4+",
   "time_utc": "2026-05-17T15:00:00+00:00",
@@ -201,6 +201,26 @@ Supported plugins: `rocket`, `litespeed`, `w3tc`, `wp_super_cache`, `cache_enabl
 | `GET` | `/forms/submissions/{id}` | One submission |
 
 If the `custom-forms-sms` plugin tables don't exist, returns `{available: false}` — handle this gracefully.
+
+### Snippets (optional, requires `code-snippets` plugin)
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/snippets[?scope=…&active=…]` | List snippets, optional filter by scope (`global`, `head-content`, `body-content`, `site-css`, …) or active flag (0/1) |
+| `GET` | `/snippets/{id}` | One snippet (includes full `code`) |
+| `POST` | `/snippets` | Create. Body: `{name, code, scope, description?, priority?, active?, tags?}` |
+| `PATCH` | `/snippets/{id}` | Partial update. Any field can be passed. |
+| `DELETE` | `/snippets/{id}` | Delete (blocked if snippet is `locked`) |
+| `POST` | `/snippets/{id}/activate` | Activate. Validates PHP code first via Code Snippets' `Validator`. |
+| `POST` | `/snippets/{id}/deactivate` | Deactivate. |
+
+Valid scopes: `global`, `admin`, `front-end`, `single-use`, `content`, `head-content`, `body-content`, `footer-content`, `admin-css`, `site-css`, `site-head-js`, `site-footer-js`.
+
+If `code-snippets` is not installed/active, all snippet endpoints return `503 sb_dep_missing`.
+
+For PHP snippets, do **not** include `<?php` / `?>` tags in `code` — Code Snippets strips them itself if present.
+
+**WAF-bypass**: many hosts run security plugins (Really Simple Security, Wordfence) that scan POST/PATCH bodies and block payloads containing patterns like `<script>` or `document.createElement` — common when installing GTM / analytics snippets. If you get an unexpected `403 http_error` with an empty message on `/snippets`, send the `code` field as `code_b64` (base64-encoded UTF-8) instead. The server decodes it before save. The Python client wraps this as `create_snippet(..., use_b64=True)`.
 
 ---
 
@@ -323,7 +343,7 @@ sb.purge_cache(url="...")
 
 ## Quick checklist before using
 
-- [ ] User has Site Bridge ≥ 1.0.2 installed
+- [ ] User has Site Bridge ≥ 1.0.3 installed
 - [ ] User has shared the per-site secret with you (and only with you)
 - [ ] You can sign a `GET /ping` and get HTTP 200
 - [ ] You know which builder(s) the site uses (run `GET /info` to see active plugins — Breakdance / Elementor / etc.)

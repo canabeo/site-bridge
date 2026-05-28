@@ -3,7 +3,7 @@
  * Plugin Name: Site Bridge
  * Plugin URI:  https://github.com/canabeo/site-bridge
  * Description: Designed to let any AI agent safely manage and edit your WordPress site. Exposes an HMAC-signed REST API for pages, plugins, files, cache and forms. Builder-agnostic — works with Breakdance, Elementor, Gutenberg, and WPBakery.
- * Version:     1.0.2
+ * Version:     1.0.3
  * Author:      Canabeo
  * Author URI:  https://github.com/canabeo
  * License:     GPL v2 or later
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SITE_BRIDGE_VERSION', '1.0.2' );
+define( 'SITE_BRIDGE_VERSION', '1.0.3' );
 define( 'SITE_BRIDGE_FILE',    __FILE__ );
 define( 'SITE_BRIDGE_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'SITE_BRIDGE_URL',     plugin_dir_url( __FILE__ ) );
@@ -57,6 +57,7 @@ require_once SITE_BRIDGE_DIR . 'includes/controller-plugins.php';
 require_once SITE_BRIDGE_DIR . 'includes/controller-files.php';
 require_once SITE_BRIDGE_DIR . 'includes/controller-cache.php';
 require_once SITE_BRIDGE_DIR . 'includes/controller-forms.php';
+require_once SITE_BRIDGE_DIR . 'includes/controller-snippets.php';
 
 // Activation / deactivation hooks
 register_activation_hook( __FILE__, [ 'SB_Installer', 'activate' ] );

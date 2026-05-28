@@ -271,6 +271,55 @@ class SiteBridge:
     def get_submission(self, sub_id: int):
         return self.request("GET", f"/forms/submissions/{sub_id}")
 
+    # Code Snippets (v1.0.3)
+    def list_snippets(self, *, scope: Optional[str] = None, active: Optional[int] = None):
+        q = {}
+        if scope is not None:
+            q["scope"] = scope
+        if active is not None:
+            q["active"] = int(active)
+        return self.request("GET", "/snippets", query=q or None)
+
+    def get_snippet(self, snippet_id: int):
+        return self.request("GET", f"/snippets/{snippet_id}")
+
+    def create_snippet(self, *, name: str, code: str, scope: str = "global",
+                       description: str = "", priority: int = 10,
+                       active: bool = False, tags: Optional[list] = None,
+                       use_b64: bool = False):
+        """Create a Code Snippets snippet.
+
+        Set use_b64=True to send `code` base64-encoded. Useful when the host's
+        WAF (e.g. Really Simple Security, Wordfence) blocks request bodies
+        containing patterns like `<script>` or `document.createElement` —
+        common when registering analytics/tag-manager snippets.
+        """
+        body = {"name": name, "scope": scope,
+                "description": description, "priority": priority,
+                "active": bool(active)}
+        if use_b64:
+            body["code_b64"] = base64.b64encode(code.encode("utf-8")).decode("ascii")
+        else:
+            body["code"] = code
+        if tags is not None:
+            body["tags"] = tags
+        return self.request("POST", "/snippets", json_body=body)
+
+    def update_snippet(self, snippet_id: int, *, use_b64: bool = False, **fields):
+        """Partial update. Set use_b64=True to send `code` field as code_b64 (WAF-safe)."""
+        if use_b64 and "code" in fields:
+            fields["code_b64"] = base64.b64encode(fields.pop("code").encode("utf-8")).decode("ascii")
+        return self.request("PATCH", f"/snippets/{snippet_id}", json_body=fields)
+
+    def delete_snippet(self, snippet_id: int):
+        return self.request("DELETE", f"/snippets/{snippet_id}")
+
+    def activate_snippet_cs(self, snippet_id: int):
+        return self.request("POST", f"/snippets/{snippet_id}/activate")
+
+    def deactivate_snippet_cs(self, snippet_id: int):
+        return self.request("POST", f"/snippets/{snippet_id}/deactivate")
+
 
 # ----- CLI -----
 
@@ -297,6 +346,11 @@ def main(argv=None):
     pg = sub.add_parser("page-get"); pg.add_argument("id", type=int)
     sub.add_parser("plugins-list")
 
+    sl = sub.add_parser("snippets-list")
+    sl.add_argument("--scope", default=None)
+    sl.add_argument("--active", type=int, default=None)
+    sg = sub.add_parser("snippet-get"); sg.add_argument("id", type=int)
+
     args = p.parse_args(argv)
     sb = SiteBridge(args.site)
 
@@ -315,6 +369,10 @@ def main(argv=None):
         _print(sb.get_page(args.id))
     elif args.cmd == "plugins-list":
         _print(sb.list_plugins())
+    elif args.cmd == "snippets-list":
+        _print(sb.list_snippets(scope=args.scope, active=args.active))
+    elif args.cmd == "snippet-get":
+        _print(sb.get_snippet(args.id))
 
 
 if __name__ == "__main__":

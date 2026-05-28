@@ -12,7 +12,7 @@
 
 All endpoints are protected by **HMAC-SHA256 signatures**, optional IP whitelist, rate-limit, and a kill-switch. The plugin **does not** use WordPress Application Passwords — its custom header (`X-SB-Signature`) flies under the radar of typical WAFs (NinjaFirewall, Wordfence, Imunify360) that aggressively gate password-based login attempts.
 
-> **Status:** v1.0.2 — production-ready. Used in a 7-site network in real-world day-to-day operations. AI agents (Claude Code, GPT, etc.) interact through it via the reference Python client.
+> **Status:** v1.0.3 — production-ready. Used in a 7-site network in real-world day-to-day operations. AI agents (Claude Code, GPT, etc.) interact through it via the reference Python client.
 
 ---
 
@@ -32,7 +32,7 @@ Site Bridge sidesteps all of these:
 
 ---
 
-## Endpoints (v1.0.2)
+## Endpoints (v1.0.3)
 
 | Group | Endpoints |
 |---|---|
@@ -44,6 +44,7 @@ Site Bridge sidesteps all of these:
 | **Files** | `GET/PUT/DELETE /files`, `GET /files/list` (whitelisted paths only) |
 | **Cache** | `POST /cache/purge` — WP Rocket, LiteSpeed, W3TC, WP Super Cache, Cache Enabler, WP Fastest Cache, Hummingbird, SG Optimizer, Swift Performance, Comet Cache, Autoptimize, Seraphinite, WP Object Cache |
 | **Forms** | `GET /forms`, `GET /forms/submissions`, `GET /forms/submissions/{id}` (reads `custom-forms-sms` plugin tables — optional integration) |
+| **Snippets** | `GET /snippets`, `GET /snippets/{id}`, `POST /snippets`, `PATCH /snippets/{id}`, `DELETE /snippets/{id}`, `POST /snippets/{id}/{activate,deactivate}` (reads/writes Code Snippets plugin — `503 sb_dep_missing` if plugin not installed) |
 
 REST namespace: `/wp-json/sb/v1/`
 

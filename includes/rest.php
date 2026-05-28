@@ -175,6 +175,50 @@ class SB_REST {
 			'callback'            => [ 'SB_Forms_Controller', 'get_submission' ],
 		] );
 
+		// === Snippets (Code Snippets plugin integration) ===
+		register_rest_route( SITE_BRIDGE_REST_NAMESPACE, '/snippets', [
+			[
+				'methods'             => 'GET',
+				'permission_callback' => $auth,
+				'callback'            => [ 'SB_Snippets_Controller', 'list_snippets' ],
+			],
+			[
+				'methods'             => 'POST',
+				'permission_callback' => $auth,
+				'callback'            => [ 'SB_Snippets_Controller', 'create_snippet' ],
+			],
+		] );
+
+		register_rest_route( SITE_BRIDGE_REST_NAMESPACE, '/snippets/(?P<id>\d+)', [
+			[
+				'methods'             => 'GET',
+				'permission_callback' => $auth,
+				'callback'            => [ 'SB_Snippets_Controller', 'get_snippet' ],
+			],
+			[
+				'methods'             => 'PATCH',
+				'permission_callback' => $auth,
+				'callback'            => [ 'SB_Snippets_Controller', 'update_snippet' ],
+			],
+			[
+				'methods'             => 'DELETE',
+				'permission_callback' => $auth,
+				'callback'            => [ 'SB_Snippets_Controller', 'delete_snippet' ],
+			],
+		] );
+
+		register_rest_route( SITE_BRIDGE_REST_NAMESPACE, '/snippets/(?P<id>\d+)/activate', [
+			'methods'             => 'POST',
+			'permission_callback' => $auth,
+			'callback'            => [ 'SB_Snippets_Controller', 'activate' ],
+		] );
+
+		register_rest_route( SITE_BRIDGE_REST_NAMESPACE, '/snippets/(?P<id>\d+)/deactivate', [
+			'methods'             => 'POST',
+			'permission_callback' => $auth,
+			'callback'            => [ 'SB_Snippets_Controller', 'deactivate' ],
+		] );
+
 		// === Audit-log writer on every response ===
 		add_filter( 'rest_post_dispatch', [ __CLASS__, 'maybe_log_response' ], 99, 3 );
 		add_filter( 'rest_pre_dispatch',  [ __CLASS__, 'mark_request_start' ], 1, 3 );
