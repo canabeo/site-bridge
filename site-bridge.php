@@ -10,7 +10,7 @@
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: site-bridge
  * Requires PHP: 7.2
- * Requires at least: 6.2
+ * Requires at least: 4.7
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

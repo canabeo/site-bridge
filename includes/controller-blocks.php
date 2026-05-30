@@ -27,6 +27,13 @@ class SB_Blocks_Controller {
 
 	/** GET /pages/{id}/blocks */
 	public static function get_blocks( WP_REST_Request $request ) {
+		if ( ! function_exists( 'parse_blocks' ) ) {
+			return SB_Response::error(
+				'sb_dep_missing',
+				'parse_blocks() requires WordPress 5.0+. This endpoint is unavailable.',
+				503
+			);
+		}
 		$id   = (int) $request->get_param( 'id' );
 		$post = get_post( $id );
 		if ( ! $post ) {
@@ -67,6 +74,13 @@ class SB_Blocks_Controller {
 	 * Auto-backup before write (unless skip_backup === true).
 	 */
 	public static function put_blocks( WP_REST_Request $request ) {
+		if ( ! function_exists( 'serialize_blocks' ) || ! function_exists( 'parse_blocks' ) ) {
+			return SB_Response::error(
+				'sb_dep_missing',
+				'serialize_blocks() / parse_blocks() require WordPress 5.0+. This endpoint is unavailable.',
+				503
+			);
+		}
 		$id   = (int) $request->get_param( 'id' );
 		$post = get_post( $id );
 		if ( ! $post ) {
