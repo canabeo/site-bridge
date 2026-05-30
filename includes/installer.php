@@ -27,6 +27,33 @@ class SB_Installer {
 		if ( ! wp_next_scheduled( self::CRON_HOOK_CLEANUP ) ) {
 			wp_schedule_event( time() + 600, 'daily', self::CRON_HOOK_CLEANUP );
 		}
+		// Generate an option-based secret when no constant is set in wp-config.php.
+		// This makes the plugin installable through wp-admin Upload Plugin alone, on
+		// hosts where editing wp-config.php is not possible.
+		self::maybe_generate_option_secret();
+	}
+
+	/**
+	 * If neither SITE_BRIDGE_SECRET constant nor sb_secret option exists, generate
+	 * a 64-byte random secret (hex-encoded) and store it in wp_options with
+	 * autoload disabled. Also flips a one-shot flag that the admin-notice handler
+	 * reads to reveal the secret once to the site administrator.
+	 */
+	public static function maybe_generate_option_secret() {
+		if ( defined( 'SITE_BRIDGE_SECRET' )
+		  && strlen( (string) SITE_BRIDGE_SECRET ) >= SB_Config::MIN_SECRET_BYTES ) {
+			return;  // user already configured a constant — nothing to do
+		}
+		$existing = get_option( SB_Config::OPT_SECRET );
+		if ( is_string( $existing ) && strlen( $existing ) >= SB_Config::MIN_SECRET_BYTES ) {
+			return;  // option already present
+		}
+		// 32 random bytes → 64 hex chars
+		$secret = bin2hex( random_bytes( 32 ) );
+		// autoload = no — secret only needed during /wp-json/sb/v1/* requests
+		add_option( SB_Config::OPT_SECRET, $secret, '', 'no' );
+		// Flag for admin-notice (shown once until the user dismisses it)
+		update_option( 'sb_secret_show', 1, false );
 	}
 
 	public static function deactivate() {

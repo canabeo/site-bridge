@@ -113,7 +113,9 @@ class SB_Blocks_Controller {
 			'post_id'        => $id,
 			'new_size'       => strlen( $new_content ),
 			'blocks_written' => count( $payload['blocks'] ),
-			'blocks_parsed'  => count( array_filter( $reparsed, fn( $b ) => $b['blockName'] !== null || trim( $b['innerHTML'] ?? '' ) !== '' ) ),
+			'blocks_parsed'  => count( array_filter( $reparsed, function ( $b ) {
+				return $b['blockName'] !== null || trim( isset( $b['innerHTML'] ) ? $b['innerHTML'] : '' ) !== '';
+			} ) ),
 		] );
 	}
 }

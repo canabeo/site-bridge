@@ -222,6 +222,66 @@ class SB_REST {
 		// === Audit-log writer on every response ===
 		add_filter( 'rest_post_dispatch', [ __CLASS__, 'maybe_log_response' ], 99, 3 );
 		add_filter( 'rest_pre_dispatch',  [ __CLASS__, 'mark_request_start' ], 1, 3 );
+
+		// === REST whitelist for /sb/v1/* — overrides plugins that block REST API
+		// (Disable REST API, iThemes/Solid Security, WP Hide & Security Enhancer, etc.)
+		// by clearing any rest_authentication_errors decision for our namespace. We
+		// run at PHP_INT_MAX so we land AFTER any blocker plugin has filtered.
+		add_filter( 'rest_authentication_errors', [ __CLASS__, 'allow_sb_namespace' ], PHP_INT_MAX );
+
+		// Some plugins also enforce a 301 redirect via the `rest_pre_serve_request`
+		// or `rest_pre_dispatch` filter. Strip those decisions for our namespace as
+		// well — same logic, same priority.
+		add_filter( 'rest_pre_dispatch', [ __CLASS__, 'clear_sb_pre_dispatch_block' ], PHP_INT_MAX, 3 );
+	}
+
+	/**
+	 * If the current request is for /sb/v1/*, force the rest_authentication_errors
+	 * filter result back to null (= "no opinion") regardless of what an earlier
+	 * filter set. The plugin's own SB_Auth::check() runs later as
+	 * permission_callback and enforces HMAC, so this is safe.
+	 *
+	 * @param mixed $result Whatever upstream filter returned (WP_Error|null|true|...)
+	 * @return mixed Original $result for non-sb requests, null for sb/v1/*.
+	 */
+	public static function allow_sb_namespace( $result ) {
+		// REST_REQUEST is true and the route is known via current REST request — but
+		// at the auth-errors filter stage the request is fully parsed only when called
+		// from rest_dispatch. We use the request URI as the cheapest, earliest check.
+		if ( self::current_uri_is_sb() ) {
+			return null;
+		}
+		return $result;
+	}
+
+	/**
+	 * If a blocker plugin returns a non-null value from `rest_pre_dispatch` for our
+	 * routes (e.g. a WP_Error or a 301 redirect WP_REST_Response), clear it. We
+	 * return null which means "continue normal dispatch" — our permission_callback
+	 * then authenticates via HMAC as usual.
+	 */
+	public static function clear_sb_pre_dispatch_block( $result, $server, $request ) {
+		if ( $result !== null && strpos( $request->get_route(), '/' . SITE_BRIDGE_REST_NAMESPACE ) === 0 ) {
+			return null;
+		}
+		return $result;
+	}
+
+	/** True iff REQUEST_URI looks like a /wp-json/sb/v1/* path (no trailing-slash assumption). */
+	private static function current_uri_is_sb() {
+		if ( empty( $_SERVER['REQUEST_URI'] ) ) {
+			return false;
+		}
+		$uri = (string) $_SERVER['REQUEST_URI'];
+		// match both pretty (/wp-json/sb/v1/…) and ugly (/?rest_route=/sb/v1/…) forms
+		if ( strpos( $uri, '/wp-json/' . SITE_BRIDGE_REST_NAMESPACE ) !== false ) {
+			return true;
+		}
+		if ( strpos( $uri, 'rest_route=/' . SITE_BRIDGE_REST_NAMESPACE ) !== false
+		  || strpos( $uri, 'rest_route=%2F' . str_replace( '/', '%2F', SITE_BRIDGE_REST_NAMESPACE ) ) !== false ) {
+			return true;
+		}
+		return false;
 	}
 
 	public static function mark_request_start( $result, $server, $request ) {
